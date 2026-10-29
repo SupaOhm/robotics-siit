@@ -16,3 +16,11 @@ venv/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Secrets (Telegram token etc.)
+.env
+
+# Model weights: download them, don't commit them
+*.pt
+*.onnx
+*_ncnn_model/

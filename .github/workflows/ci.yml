@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"   # same as ROS 2 Humble on Ubuntu 22.04
+      - run: pip install pytest
+      - name: Run tests in every package that has a test/ folder
+        run: |
+          status=0
+          for t in src/*/test; do
+            [ -d "$t" ] || continue
+            pkg=$(dirname "$t")
+            echo "::group::$pkg"
+            (cd "$pkg" && python -m pytest test) || status=1
+            echo "::endgroup::"
+          done
+          exit $status
