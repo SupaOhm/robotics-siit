@@ -38,12 +38,12 @@ people with a password.
 
 | Lane | People | Owns |
 |---|---|---|
-| 1. Integration, hardware base, PM | TBD | ROS nodes/topics/messages, state machine, gesture override, robot OS/ROS setup, porting to robot |
+| 1. Integration, hardware base, PM | guy | ROS nodes/topics/messages, state machine, gesture override, robot OS/ROS setup, porting to robot |
 | 2. AI & vision | purin, ohm | Gesture ROS node, YOLO detection, person class, Thai name table |
 | 3. Navigation & avoidance, co-PM | po | Distance sensor driver, noise filter, threshold, turn/resume logic |
 | 4. I/O & external comms | pun, fah | Audio clips + playback cooldown, password system, Telegram bot |
 | 5. Simulation & QA | bew, big | CoppeliaSim scene + ROS bridge, FPS benchmark, system testing |
-| 6. Docs & presentation | TBD | Report, demo video, slides |
+| 6. Docs & presentation | aom | Report, demo video, slides |
 
 ## Timeline
 
@@ -53,8 +53,8 @@ people with a password.
 - [x] First package merged (`password_system`, Lane 4)
 - [x] Plan, README, contribution rules, PR template, CI
 - [ ] All 9 members added as collaborators
-- [ ] Lane 1 and Lane 6 names filled in above
-- [ ] `main` branch protected (PR + 1 review)
+- [x] Lane 1 and Lane 6 names filled in above
+- [x] `main` branch protected (PR + 1 review)
 - [ ] Everyone has cloned the repo and read [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ### Phase 1: Architecture & setup (Oct 29 – 30)
