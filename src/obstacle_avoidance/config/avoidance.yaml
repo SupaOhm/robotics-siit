@@ -1,0 +1,28 @@
+avoidance_node:
+  ros__parameters:
+    # scan:  LiDAR, sensor_msgs/LaserScan on scan_topic
+    # range: ultrasonic, sensor_msgs/Range on range_topic
+    input_type: "scan"
+    scan_topic: "/scan"
+    range_topic: "/ultrasonic/range"   # check the Yahboom name with `ros2 topic list`
+    cmd_vel_topic: "/avoidance/cmd_vel"
+
+    # LiDAR only
+    front_angle_deg: 0.0        # 180.0 if the LiDAR is mounted facing backward
+    front_half_width_deg: 15.0  # front sector is +-15 deg
+    side_half_width_deg: 30.0   # left / right sectors are +-30 deg around +-90 deg
+
+    filter_window: 5            # median of the last 5 readings
+    min_range: 0.02             # closer than this = glitch, dropped (m)
+    max_range: 4.0              # farther / inf = nothing near (m)
+
+    stop_distance: 0.30         # blocked at or below this (m)
+    clear_distance: 0.40        # clear again at or above this (m)
+    sensor_timeout: 0.5         # no reading this long -> blocked, turn fails (s)
+
+    turn_speed: 1.0             # rad/s while turning in place
+    min_turn_deg: 30.0
+    max_turn_deg: 270.0         # turned this far with no clear front -> "failed"
+    clear_time: 0.3             # front must stay clear this long (s)
+    default_direction: 1        # 1 = left, -1 = right (ultrasonic, or a tie)
+    control_rate: 20.0          # Hz
