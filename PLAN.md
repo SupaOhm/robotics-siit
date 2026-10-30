@@ -101,7 +101,7 @@ people with a password.
 
 ## Open questions for Lane 1 (decide in Phase 1)
 
-Proposed answers: [docs/interfaces.md](docs/interfaces.md#decisions-for-lane-1s-open-questions).
+Decided: see [docs/decisions.md](docs/decisions.md) (Q1 = D11, Q2 = D12, Q3 = D13, Q4 = D19, Q5 = D14).
 
 1. After Deny or timeout, what makes the robot stop blocking? (e.g. a Telegram
    "Resume" button)
