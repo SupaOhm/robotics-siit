@@ -101,6 +101,8 @@ people with a password.
 
 ## Open questions for Lane 1 (decide in Phase 1)
 
+Proposed answers: [docs/interfaces.md](docs/interfaces.md#decisions-for-lane-1s-open-questions).
+
 1. After Deny or timeout, what makes the robot stop blocking? (e.g. a Telegram
    "Resume" button)
 2. After a correct password, how do we avoid asking the same person again on
