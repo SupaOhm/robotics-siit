@@ -11,8 +11,9 @@ def generate_launch_description():
     config = os.path.join(get_package_share_directory("password_system"),
                           "config", "password.yaml")
     return LaunchDescription([
-        DeclareLaunchArgument("input_mode", default_value="camera"),
-        DeclareLaunchArgument("image_topic", default_value="/camera/image_raw"),
+        DeclareLaunchArgument("input_mode", default_value="mic"),
+        DeclareLaunchArgument("engine", default_value="google"),
+        DeclareLaunchArgument("language", default_value="en-US"),
         Node(
             package="password_system",
             executable="password_node",
@@ -20,7 +21,8 @@ def generate_launch_description():
             output="screen",
             parameters=[config, {
                 "input_mode": LaunchConfiguration("input_mode"),
-                "image_topic": LaunchConfiguration("image_topic"),
+                "engine": LaunchConfiguration("engine"),
+                "language": LaunchConfiguration("language"),
             }],
         ),
     ])

@@ -29,7 +29,7 @@ people with a password.
 | Gesture control | OpenCV + MediaPipe (existing code) |
 | Object detection | Pretrained YOLO (COCO) + spoken name table (class to English phrase) |
 | Distance sensing | LiDAR or ultrasonic (TBD) |
-| Password | Hand-gesture finger-count sequence (done, `src/password_system`) |
+| Password | Spoken password: microphone + speech-to-text (Google online, Vosk offline) (done, `src/password_system`) |
 | Audio | Pre-recorded English clips |
 | Operator alert | Telegram bot |
 | Simulation | CoppeliaSim |
@@ -97,6 +97,7 @@ people with a password.
 | Low light hurts gesture and object recognition | Test in demo lighting early (Lane 5) |
 | YOLO doesn't know walls, doors, boxes | They fall back to "Found an obstacle" |
 | Telegram needs internet on the robot | Confirm Wi-Fi at the demo venue in Phase 1 |
+| Noise or no internet hurts the spoken password | Test the mic at the venue; switch `engine` to `vosk` (offline); 3 engine failures hand over to the operator |
 
 ## Open questions for Lane 1 (decide in Phase 1)
 

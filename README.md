@@ -2,7 +2,7 @@
 
 A Yahboom RosmasterPi A1 that the operator drives with hand gestures. It
 stops at obstacles, names them in English, and checks people at a
-gesture-password checkpoint, alerting the operator on Telegram when a
+spoken-password checkpoint, alerting the operator on Telegram when a
 password fails.
 
 - **Plan, lanes and timeline:** [PLAN.md](PLAN.md)
@@ -15,7 +15,7 @@ package under `src/`, created and owned by its lane.
 
 ```
 src/
-  password_system/    Lane 4, gesture-sequence password (done)
+  password_system/    Lane 4, spoken password (done)
   ...                 other packages are added by their lanes
 docs/                 interface contract, architecture, report
 sim/                  CoppeliaSim scenes
