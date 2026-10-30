@@ -3,7 +3,7 @@
 ## Goal
 
 A robot that the operator drives with hand gestures. It stops at obstacles
-and names them in Thai, and it acts as a security checkpoint by checking
+and names them in English, and it acts as a security checkpoint by checking
 people with a password.
 
 ## System flow
@@ -11,9 +11,9 @@ people with a password.
 1. The operator drives the robot with hand gestures.
 2. The distance sensor detects an obstacle, the robot stops, and the camera
    classifies it.
-3. **Object:** the robot says its name in Thai ("เจอเก้าอี้", "เจอโต๊ะ"). If the
-   object is unknown or confidence is low, it says "เจอสิ่งกีดขวาง". Then it
-   turns away and continues.
+3. **Object:** the robot says its name in English ("Found a chair", "Found a
+   table"). If the object is unknown or confidence is low, it says "Found an
+   obstacle". Then it turns away and continues.
 4. **Person:** the robot asks for a password.
    - Correct: it confirms out loud and passes.
    - Wrong (3 attempts): it plays an alert and sends a photo to the operator
@@ -27,10 +27,10 @@ people with a password.
 |---|---|
 | Robot | Yahboom RosmasterPi A1, ROS 2 (`ament_python`, colcon) |
 | Gesture control | OpenCV + MediaPipe (existing code) |
-| Object detection | Pretrained YOLO (COCO) + English-to-Thai name table |
+| Object detection | Pretrained YOLO (COCO) + spoken name table (class to English phrase) |
 | Distance sensing | LiDAR or ultrasonic (TBD) |
 | Password | Hand-gesture finger-count sequence (done, `src/password_system`) |
-| Audio | Pre-recorded Thai clips |
+| Audio | Pre-recorded English clips |
 | Operator alert | Telegram bot |
 | Simulation | CoppeliaSim |
 
@@ -39,7 +39,7 @@ people with a password.
 | Lane | People | Owns |
 |---|---|---|
 | 1. Integration, hardware base, PM | guy | ROS nodes/topics/messages, state machine, gesture override, robot OS/ROS setup, porting to robot |
-| 2. AI & vision | purin, ohm | Gesture ROS node, YOLO detection, person class, Thai name table |
+| 2. AI & vision | purin, ohm | Gesture ROS node, YOLO detection, person class, spoken name table |
 | 3. Navigation & avoidance, co-PM | po | Distance sensor driver, noise filter, threshold, turn/resume logic |
 | 4. I/O & external comms | pun, fah | Audio clips + playback cooldown, password system, Telegram bot |
 | 5. Simulation & QA | bew, big | CoppeliaSim scene + ROS bridge, FPS benchmark, system testing |
@@ -67,7 +67,7 @@ people with a password.
 ### Phase 2: Parallel development (Oct 31 – Nov 3)
 
 - [ ] Lane 1: core state machine and gesture command override
-- [ ] Lane 2: gesture code as a ROS node; YOLO deployed; Thai name table (8–10 objects)
+- [ ] Lane 2: gesture code as a ROS node; YOLO deployed; spoken name table in English (8–10 objects)
 - [ ] Lane 3: sensor driver, noise filter, avoidance turn logic
 - [ ] Lane 4: record audio clips; Telegram bot (password system already done)
 - [ ] Lane 5: empty CoppeliaSim scene
@@ -95,7 +95,7 @@ people with a password.
 |---|---|
 | MediaPipe + YOLO together drop FPS on the robot | Benchmark by Oct 30; run YOLO only when the robot stops; lower resolution / alternate frames; fallback to laptop inference over Wi-Fi |
 | Low light hurts gesture and object recognition | Test in demo lighting early (Lane 5) |
-| YOLO doesn't know walls, doors, boxes | They fall back to "เจอสิ่งกีดขวาง" |
+| YOLO doesn't know walls, doors, boxes | They fall back to "Found an obstacle" |
 | Telegram needs internet on the robot | Confirm Wi-Fi at the demo venue in Phase 1 |
 
 ## Open questions for Lane 1 (decide in Phase 1)
