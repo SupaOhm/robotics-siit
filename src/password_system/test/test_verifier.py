@@ -1,98 +1,134 @@
+import pytest
+
+from password_system.normalize import normalize
 from password_system.verifier import EventType, PasswordVerifier, hash_password
 
 SALT = "testsalt"
 
 
-def make(password="1352", attempts=3, timeout=15.0):
-    return PasswordVerifier(hash_password(password, SALT), SALT, len(password),
-                            attempts, timeout)
+def make(password="one three five two", attempts=3, match_mode="contains",
+         max_service_errors=3):
+    n = normalize(password)
+    return PasswordVerifier(hash_password(n, SALT), SALT, len(n), attempts,
+                            match_mode, max_service_errors)
 
 
-def enter(v, code, t=0.0):
-    events = []
-    for i, c in enumerate(code):
-        events += v.feed(c, t + i)
+def types(events):
     return [e.type for e in events]
 
 
 def test_correct_password_granted():
     v = make()
-    assert [e.type for e in v.start(0.0)] == [EventType.STARTED]
-    types = enter(v, "1352")
-    assert types[-1] == EventType.GRANTED
+    assert types(v.start()) == [EventType.STARTED]
+    assert types(v.submit(["one three five two"])) == [EventType.GRANTED]
     assert not v.active
+
+
+@pytest.mark.parametrize("heard", [
+    "1352", "1 3 5 2", "One, three, five, two.", "1,352", "one 3 five to",
+    "หนึ่ง สาม ห้า สอง", "๑๓๕๒",
+])
+def test_transcription_variants_match(heard):
+    v = make()
+    v.start()
+    assert types(v.submit([heard])) == [EventType.GRANTED]
+
+
+def test_contains_mode_allows_extra_words():
+    v = make()
+    v.start()
+    assert types(v.submit(["the password is 1352 thanks"])) == [EventType.GRANTED]
+
+
+def test_exact_mode_rejects_extra_words():
+    v = make(match_mode="exact")
+    v.start()
+    assert types(v.submit(["the password is 1352"])) == [EventType.WRONG]
+    assert types(v.submit(["1352"])) == [EventType.GRANTED]
+
+
+def test_any_candidate_can_match():
+    v = make()
+    v.start()
+    assert types(v.submit(["one tree five too", "1352"])) == [EventType.GRANTED]
 
 
 def test_three_wrong_attempts_lock_out():
     v = make()
-    v.start(0.0)
-    assert enter(v, "1111")[-1] == EventType.WRONG
+    v.start()
+    assert types(v.submit(["1111"])) == [EventType.WRONG]
     assert v.attempts_left == 2
-    assert enter(v, "2222")[-1] == EventType.WRONG
-    types = enter(v, "3333")
-    assert types[-2:] == [EventType.WRONG, EventType.LOCKED_OUT]
+    assert types(v.submit(["hello"])) == [EventType.WRONG]
+    assert types(v.submit(["2222"])) == [EventType.WRONG, EventType.LOCKED_OUT]
     assert not v.active
     assert v.attempts_left == 0
 
 
 def test_correct_after_wrong():
     v = make()
-    v.start(0.0)
-    enter(v, "5555")
-    assert enter(v, "1352")[-1] == EventType.GRANTED
+    v.start()
+    v.submit(["5555"])
+    assert types(v.submit(["1352"])) == [EventType.GRANTED]
 
 
-def test_wrong_attempt_clears_partial_input():
+def test_silence_and_unclear_cost_attempts():
     v = make()
-    v.start(0.0)
-    enter(v, "4444")
-    assert v.tokens_entered == 0
+    v.start()
+    assert types(v.no_speech()) == [EventType.NO_SPEECH]
+    assert types(v.submit([])) == [EventType.UNCLEAR]
+    assert types(v.submit(["  "])) == [EventType.UNCLEAR, EventType.LOCKED_OUT]
 
 
-def test_input_timeout_costs_attempt():
-    v = make(timeout=10.0)
-    v.start(0.0)
-    assert v.tick(9.9) == []
-    assert [e.type for e in v.tick(10.0)] == [EventType.ATTEMPT_TIMEOUT]
-    assert v.attempts_left == 2
-    v.tick(20.0)
-    types = [e.type for e in v.tick(30.0)]
-    assert types == [EventType.ATTEMPT_TIMEOUT, EventType.LOCKED_OUT]
+def test_service_errors_do_not_cost_attempts():
+    v = make(max_service_errors=3)
+    v.start()
+    assert types(v.service_error()) == [EventType.SERVICE_ERROR]
+    assert v.attempts_left == 3
+    v.service_error()
+    assert types(v.service_error()) == [EventType.SERVICE_ERROR, EventType.LOCKED_OUT]
+    assert not v.active
 
 
-def test_timeout_resets_on_input():
-    v = make(timeout=10.0)
-    v.start(0.0)
-    v.feed("1", 8.0)
-    assert v.tick(15.0) == []
+def test_service_error_count_resets_after_good_listen():
+    v = make(max_service_errors=2)
+    v.start()
+    v.service_error()
+    v.submit(["9999"])
+    assert types(v.service_error()) == [EventType.SERVICE_ERROR]
+    assert v.active
 
 
-def test_feed_ignored_when_inactive():
+def test_inactive_session_ignores_input():
     v = make()
-    assert v.feed("1", 0.0) == []
-    assert v.tick(100.0) == []
+    assert v.submit(["1352"]) == []
+    assert v.no_speech() == []
+    assert v.service_error() == []
+    assert v.listening() == []
 
 
 def test_cancel():
     v = make()
-    v.start(0.0)
-    v.feed("1", 1.0)
-    assert [e.type for e in v.cancel()] == [EventType.CANCELLED]
+    v.start()
+    assert types(v.cancel()) == [EventType.CANCELLED]
     assert not v.active
     assert v.cancel() == []
 
 
 def test_restart_resets_attempts():
     v = make()
-    v.start(0.0)
-    enter(v, "1111")
-    v.start(10.0)
+    v.start()
+    v.submit(["1111"])
+    v.start()
     assert v.attempts_left == 3
 
 
-def test_event_does_not_leak_digits():
+def test_thai_phrase_password():
+    v = make(password="เปิด ประตู")
+    v.start()
+    assert types(v.submit(["ช่วยเปิดประตูหน่อย"])) == [EventType.GRANTED]
+
+
+def test_event_dict_has_no_transcript():
     v = make()
-    v.start(0.0)
-    ev = v.feed("1", 0.0)[0].to_dict()
-    assert "1" not in [str(x) for x in ev.values() if isinstance(x, str)]
-    assert ev["tokens_entered"] == 1
+    ev = v.start()[0].to_dict()
+    assert ev == {"type": "started", "attempts_left": 3}

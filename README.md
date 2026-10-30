@@ -15,7 +15,7 @@ package under `src/`, created and owned by its lane.
 
 ```
 src/
-  password_system/    Lane 4, gesture-sequence password (superseded: the password is spoken)
+  password_system/    Lane 4, spoken password (password_node)
   ...                 other packages are added by their lanes
 docs/                 interface contract, architecture, report
 sim/                  CoppeliaSim scenes
