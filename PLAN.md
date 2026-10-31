@@ -39,7 +39,7 @@ people with a password.
 | Lane | People | Owns |
 |---|---|---|
 | 1. Integration, hardware base, PM | guy | ROS nodes/topics/messages, state machine, gesture override, robot OS/ROS setup, porting to robot |
-| 2. AI & vision | purin, ohm | Gesture ROS node, YOLO detection, person class, spoken name table |
+| 2. AI & vision | purin (gesture control), ohm (object detection) | Gesture ROS node (purin); YOLO detection, person class, spoken name table (ohm) |
 | 3. Navigation & avoidance, co-PM | po | Distance sensor driver, noise filter, threshold, turn/resume logic |
 | 4. I/O & external comms | pun, fah | Audio clips + playback cooldown, password system, Telegram bot |
 | 5. Simulation & QA | bew, big | CoppeliaSim scene + ROS bridge, FPS benchmark, system testing |
@@ -67,7 +67,8 @@ people with a password.
 ### Phase 2: Parallel development (Oct 31 – Nov 3)
 
 - [ ] Lane 1: core state machine and gesture command override
-- [ ] Lane 2: gesture code as a ROS node; YOLO deployed; spoken name table in English (8–10 objects)
+- [ ] Lane 2 (purin): gesture code as a ROS node on the laptop, sending drive commands to the robot
+- [ ] Lane 2 (ohm): YOLO deployed; person class; spoken name table in English (8–10 objects)
 - [ ] Lane 3: sensor driver, noise filter, avoidance turn logic
 - [ ] Lane 4: record audio clips; Telegram bot; spoken password (decide what is said, then speech recognition)
 - [ ] Lane 5: empty CoppeliaSim scene
@@ -124,14 +125,14 @@ Decided: see [docs/decisions.md](docs/decisions.md) (Q1 = D23, Q2 = D9: replaced
 
 ## Open questions for Lane 2
 
-1. Which camera does object detection use: the robot's onboard camera, or
+1. (ohm) Which camera does object detection use: the robot's onboard camera, or
    something else? (Gesture control uses the operator's laptop camera.)
-2. Is a decision gesture (e.g. thumbs-up / thumbs-down) needed? Depends on
+2. (purin) Is a decision gesture (e.g. thumbs-up / thumbs-down) needed? Depends on
    Lane 1 question 5.
-3. How does the laptop gesture node send drive commands to the robot: ROS 2
+3. (purin) How does the laptop gesture node send drive commands to the robot: ROS 2
    over the same Wi-Fi network, and what happens if the link drops (stop
    the robot)?
-4. How does the detector tell a person from the operator or a bystander in
+4. (ohm) How does the detector tell a person from the operator or a bystander in
    frame, and what confidence threshold counts as "person"?
 
 ## Open questions for Lane 3
