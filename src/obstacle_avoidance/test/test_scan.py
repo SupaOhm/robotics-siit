@@ -35,3 +35,15 @@ def test_front_angle_for_backward_lidar():
 def test_no_finite_reading_gives_inf():
     ranges, a0, inc = scan({}, default=math.inf)
     assert sector_min(ranges, a0, inc, 0.0, math.radians(15)) == math.inf
+
+
+def test_zero_beams_are_skipped():
+    """The YDLIDAR driver leaves beams with no return at 0."""
+    ranges, a0, inc = scan({0: 0.0, 5: 0.0, 10: 0.7})
+    front, _, _ = front_left_right(ranges, a0, inc, min_valid=0.05)
+    assert front == 0.7
+
+
+def test_sector_with_no_usable_reading_is_nan():
+    ranges, a0, inc = scan({}, default=0.0)
+    assert math.isnan(sector_min(ranges, a0, inc, 0.0, math.radians(15), 0.05))

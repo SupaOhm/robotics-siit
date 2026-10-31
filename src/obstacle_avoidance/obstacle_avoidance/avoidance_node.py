@@ -112,7 +112,8 @@ class AvoidanceNode(Node):
     def on_scan(self, msg) -> None:
         front, left, right = front_left_right(
             msg.ranges, msg.angle_min, msg.angle_increment, self.front_angle,
-            self.front_half_width, self.side_half_width)
+            self.front_half_width, self.side_half_width,
+            max(msg.range_min, self.front.min_range))
         self.left.update(left)
         self.right.update(right)
         self.on_front(front)
@@ -121,9 +122,9 @@ class AvoidanceNode(Node):
         self.on_front(msg.range)
 
     def on_front(self, reading: float) -> None:
+        if not self.front.valid(reading):
+            return  # glitches don't count as a live sensor, so only-glitches goes stale
         distance = self.front.update(reading)
-        if distance is None:
-            return
         self.last_reading_t = self.now()
         if self.stale:
             self.get_logger().info("distance sensor online")

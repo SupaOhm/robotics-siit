@@ -14,26 +14,31 @@ def _wrap(angle: float) -> float:
 
 
 def sector_min(ranges: Sequence[float], angle_min: float, angle_increment: float,
-               center: float, half_width: float) -> float:
-    """Closest finite reading within ``half_width`` of ``center``.
-    Returns inf when the sector has no finite reading."""
-    closest = math.inf
+               center: float, half_width: float, min_valid: float = 0.0) -> float:
+    """Closest reading within ``half_width`` of ``center``.
+
+    Readings below ``min_valid`` (and NaN) are beams with no return: the
+    YDLIDAR driver leaves those at 0. They are skipped. Returns inf when the
+    sector only has inf readings (nothing in range), and NaN when it has no
+    usable reading at all.
+    """
+    closest = math.nan
     for i, r in enumerate(ranges):
-        if not math.isfinite(r):
+        if math.isnan(r) or r < min_valid:
             continue
         if abs(_wrap(angle_min + i * angle_increment - center)) <= half_width:
-            closest = min(closest, r)
+            closest = r if math.isnan(closest) else min(closest, r)
     return closest
 
 
 def front_left_right(ranges: Sequence[float], angle_min: float, angle_increment: float,
                      front_angle: float = 0.0, front_half_width: float = math.radians(15),
-                     side_half_width: float = math.radians(30)):
+                     side_half_width: float = math.radians(30), min_valid: float = 0.0):
     """(front, left, right) closest distances. Left and right are centred at
     +90 and -90 degrees from the robot's front."""
     def sector(offset, half_width):
         return sector_min(ranges, angle_min, angle_increment,
-                          front_angle + offset, half_width)
+                          front_angle + offset, half_width, min_valid)
     return (sector(0.0, front_half_width),
             sector(math.pi / 2, side_half_width),
             sector(-math.pi / 2, side_half_width))

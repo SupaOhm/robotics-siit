@@ -25,10 +25,13 @@ class RangeFilter:
         self.max_range = max_range
         self._readings = deque(maxlen=window)
 
+    def valid(self, reading: float) -> bool:
+        return not math.isnan(reading) and reading >= self.min_range
+
     def update(self, reading: float) -> Optional[float]:
         """Add one raw reading, return the filtered distance (None until the
         first valid reading)."""
-        if not math.isnan(reading) and reading >= self.min_range:
+        if self.valid(reading):
             self._readings.append(min(reading, self.max_range))
         return self.value
 

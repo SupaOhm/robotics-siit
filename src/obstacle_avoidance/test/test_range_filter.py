@@ -45,3 +45,11 @@ def test_bad_config():
         RangeFilter(window=0)
     with pytest.raises(ValueError):
         RangeFilter(min_range=2.0, max_range=1.0)
+
+
+def test_valid():
+    f = RangeFilter(min_range=0.02)
+    assert f.valid(0.5)
+    assert f.valid(math.inf)
+    assert not f.valid(0.0)
+    assert not f.valid(math.nan)
