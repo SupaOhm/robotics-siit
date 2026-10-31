@@ -75,7 +75,7 @@ Lane 3's `obstacle_avoidance` topics, with one change to
 
 | Topic | Type | From → To | Meaning |
 |---|---|---|---|
-| `/obstacle/detected` | `std_msgs/Bool` | avoidance_node → state_machine | Published at a fixed **10 Hz**. `true` while blocked (0.30 m stop, 0.40 m clear), and `true` from start-up until the first valid reading |
+| `/obstacle/detected` | `std_msgs/Bool` | avoidance_node → state_machine | Published at a fixed **10 Hz**. `true` while blocked (0.30 m stop, 0.40 m clear), `true` from start-up until the first valid reading, and `true` while the sensor has given no valid reading for `sensor_timeout` |
 | `/obstacle/distance` | `std_msgs/Float32` | avoidance_node → anyone | Filtered front distance (m) |
 | `/avoidance/start` | `std_msgs/Empty` | state_machine → avoidance_node | Turn away from what is in front |
 | `/avoidance/cancel` | `std_msgs/Empty` | state_machine → avoidance_node | Stop turning |
@@ -85,6 +85,10 @@ Lane 3's `obstacle_avoidance` topics, with one change to
 **No `/obstacle/detected` for 1 s → the state machine treats the path as
 blocked.** Silence only blocks `forward`. It never counts as an obstacle
 appearing, so it doesn't start `CLASSIFY`.
+
+A sensor that fails while the node is running is different: the topic goes
+`true`, which may start `CLASSIFY`. That ends as `failed` and returns to
+`DRIVE`.
 
 ### Detection (Lane 2)
 
