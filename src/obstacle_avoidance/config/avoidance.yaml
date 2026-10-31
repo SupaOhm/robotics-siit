@@ -20,9 +20,12 @@ avoidance_node:
     clear_distance: 0.40        # clear again at or above this (m)
     sensor_timeout: 0.5         # no reading this long -> blocked, turn fails (s)
 
+    # The state machine cancels AVOID after 10 s with no result, so keep
+    # max_turn_deg / turn_speed (in rad) + clear_time well under 10 s.
     turn_speed: 1.0             # rad/s while turning in place
     min_turn_deg: 30.0
     max_turn_deg: 270.0         # turned this far with no clear front -> "failed"
     clear_time: 0.3             # front must stay clear this long (s)
     default_direction: 1        # 1 = left, -1 = right (ultrasonic, or a tie)
     control_rate: 20.0          # Hz
+    detected_rate: 10.0         # Hz, /obstacle/detected heartbeat (contract D5)

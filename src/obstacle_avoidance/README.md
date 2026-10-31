@@ -23,7 +23,7 @@ it without ROS.
 |---|---|---|---|
 | `/scan` or `/ultrasonic/range` | `LaserScan` / `Range` | in | Raw sensor (topic names are parameters) |
 | `/obstacle/distance` | `std_msgs/Float32` | out | Filtered front distance in metres, one per reading |
-| `/obstacle/detected` | `std_msgs/Bool` | out | `True` while blocked. Also `True` once if the sensor goes silent |
+| `/obstacle/detected` | `std_msgs/Bool` | out | Sent at a fixed 10 Hz. `True` while blocked, from start-up until the first valid reading, and while the sensor is silent |
 | `/avoidance/start` | `std_msgs/Empty` | in | Turn away from the obstacle in front |
 | `/avoidance/cancel` | `std_msgs/Empty` | in | Stop turning |
 | `/avoidance/cmd_vel` | `geometry_msgs/Twist` | out | Turn command (`angular.z` only), sent only while turning |
@@ -38,9 +38,10 @@ named the object              -> publish /avoidance/start, forward /avoidance/cm
 /avoidance/result == "failed" -> boxed in or sensor lost: stop, ask the operator
 ```
 
-The node never drives forward and never writes `/cmd_vel` itself. Lane 1
-decides who owns `/cmd_vel` (gesture vs. avoidance). To let this node drive
-directly, launch it with `cmd_vel_topic:=/cmd_vel`.
+The node never drives forward and never writes `/cmd_vel` itself. Only the
+state machine writes `/cmd_vel`, and in `AVOID` it forwards
+`/avoidance/cmd_vel` (contract D2). For a bench test without the state
+machine, launch with `cmd_vel_topic:=/cmd_vel`.
 
 ## How it decides
 
@@ -53,8 +54,12 @@ directly, launch it with `cmd_vel_topic:=/cmd_vel`.
   the front has stayed clear (0.40 m) for 0.3 s. After 270 degrees with no
   clear front it reports `failed`. Without odometry the node estimates the
   angle as speed x time, so tune `turn_speed` on the real robot.
-- **Sensor silent for 0.5 s:** `/obstacle/detected` goes `True` and any turn
-  ends as `failed`. A turn requested before the first reading also fails.
+- **Sensor silent for 0.5 s:** `/obstacle/detected` stays `True` until
+  readings come back, and any turn ends as `failed`. A turn requested before
+  the first reading also fails.
+- **Turn time:** the state machine cancels a turn after 10 s with no result.
+  At 1 rad/s the longest turn (270 degrees) takes about 4.7 s. Keep
+  `turn_speed` above about 0.5 rad/s, or lower `max_turn_deg` with it.
 
 Every number above is a parameter in [config/avoidance.yaml](config/avoidance.yaml).
 
@@ -101,11 +106,10 @@ config/avoidance.yaml
 launch/avoidance.launch.py
 ```
 
+The topic contract lives in `docs/interfaces.md` (D5 for this package).
+
 ## Open questions
 
-1. LiDAR or ultrasonic? (Lane 1 question 4)
+1. LiDAR or ultrasonic? D19 says LiDAR if the A1 has one; confirmed at bring-up
 2. Stop and clear distances: 0.30 / 0.40 m are first guesses. Tune them on
    the robot with the demo obstacles.
-3. Who owns `/cmd_vel` while the robot turns: this node, or Lane 1's mux?
-4. After a person is cleared, does the robot turn away (this node) or wait
-   for the operator? (Lane 3 question 3)

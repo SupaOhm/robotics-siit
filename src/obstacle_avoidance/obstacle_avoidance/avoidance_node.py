@@ -4,15 +4,15 @@ Topics:
   sub  <scan_topic>         LaserScan  input_type == "scan" (LiDAR)
   sub  <range_topic>        Range      input_type == "range" (ultrasonic)
   pub  /obstacle/distance   Float32    filtered front distance (m)
-  pub  /obstacle/detected   Bool       True while blocked, or while the sensor is silent
+  pub  /obstacle/detected   Bool       fixed rate (10 Hz): True while blocked, before the
+                                       first valid reading, and while the sensor is silent
   sub  /avoidance/start     Empty      turn away from the obstacle (main state machine)
   sub  /avoidance/cancel    Empty      stop turning
   pub  <cmd_vel_topic>      Twist      turn command, only while turning
   pub  /avoidance/result    String     "done" | "failed" | "cancelled" (once per turn)
 
-The node never drives forward. The main state machine (Lane 1) decides who
-owns /cmd_vel; by default this node publishes on /avoidance/cmd_vel for it
-to forward.
+The node never drives forward. Only the state machine (Lane 1) writes
+/cmd_vel; it forwards /avoidance/cmd_vel while in AVOID (contract D2).
 """
 
 import math
@@ -58,6 +58,7 @@ class AvoidanceNode(Node):
         p("clear_time", 0.3)
         p("default_direction", 1)  # 1 = left, -1 = right
         p("control_rate", 20.0)
+        p("detected_rate", 10.0)
 
         g = lambda name: self.get_parameter(name).value
         self.input_type = g("input_type")
@@ -100,6 +101,7 @@ class AvoidanceNode(Node):
             raise RuntimeError("unknown input_type: %s" % self.input_type)
 
         self.create_timer(1.0 / float(g("control_rate")), self.on_timer)
+        self.create_timer(1.0 / float(g("detected_rate")), self.publish_detected)
         self.get_logger().info(
             "avoidance_node ready (input=%s, stop=%.2f m, clear=%.2f m)"
             % (self.input_type, self.detector.stop_distance, clear_distance))
@@ -126,8 +128,12 @@ class AvoidanceNode(Node):
         if self.stale:
             self.get_logger().info("distance sensor online")
             self.stale = False
+        self.detector.update(distance)
         self.distance_pub.publish(Float32(data=float(distance)))
-        self.detected_pub.publish(Bool(data=self.detector.update(distance)))
+
+    def publish_detected(self) -> None:
+        """Fixed-rate heartbeat (contract D5): a silent sensor reads as blocked."""
+        self.detected_pub.publish(Bool(data=self.stale or self.detector.blocked))
 
     def on_start(self, _msg) -> None:
         if self.stale:
@@ -147,7 +153,6 @@ class AvoidanceNode(Node):
             self.stale = True
             self.front.reset()
             self.detector.reset()
-            self.detected_pub.publish(Bool(data=True))  # fail safe: treat as blocked
             self.publish(self.avoider.fail())
         if self.avoider.active:
             self.publish(self.avoider.tick(t, self.front.value))
