@@ -13,7 +13,7 @@ bring-up checklist is in [robot-setup.md](robot-setup.md).
 |---|---|---|---|---|
 | D1 | Message types | Standard `std_msgs` / `geometry_msgs` / `sensor_msgs`, JSON in a `String` when structured | Custom `robot_interfaces` package (every lane waits for its build) | All |
 | D2 | Who owns `/cmd_vel` | Only the state machine. Others publish their own `/…/cmd_vel` and it forwards one | `twist_mux` (priorities only, no states); every node writes `/cmd_vel` (they fight) | 1, 3 |
-| D3 | Gesture output | Words `forward` `back` `left` `right` `stop` on `/gesture/command`, plus `none` (no hand, heartbeat only). `stop` is a deliberate gesture | `Twist` speeds (tuning spread across lanes); `stop` doubling as "no hand" (freezes avoidance) | 2 |
+| D3 | Gesture output | Words `forward` `back` `left` `right` `stop` on `/gesture/command`, plus `none` (no hand: zero speed in `DRIVE`, heartbeat only elsewhere). `stop` is a deliberate gesture | `Twist` speeds (tuning spread across lanes); `stop` doubling as "no hand" (freezes avoidance) | 2 |
 | D4 | Laptop link drops | Gesture node publishes at 10 Hz; nothing for 0.5 s → robot stops | Keep the last command (drives blind) | 2 |
 | D5 | Obstacle topics | Lane 3's `obstacle_avoidance` topics, but `/obstacle/detected` is published at a fixed 10 Hz, starts `true` until the first valid reading, and 1 s of silence counts as blocked | Rename to a Lane 1 scheme; publish only on change (silence looks like a clear path) | 3 |
 | D6 | Avoidance reports `failed` | Stop, play a clip, hand driving back to the operator | Send a Telegram alert | 3 |
@@ -26,14 +26,14 @@ bring-up checklist is in [robot-setup.md](robot-setup.md).
 
 | # | Question | Picked | Other options considered | Owner to check |
 |---|---|---|---|---|
-| D11 | What ends blocking after Deny / timeout | Telegram **Resume** button **and** holding the `back` gesture | Only one of the two | 1, 4 |
+| D11 | What ends blocking after Deny / timeout | Telegram **Resume** button **and** holding the `back` gesture. Both go to `AVOID` (turn away from the person) | Only one of the two; `back` goes to `DRIVE` instead | 1, 4 |
 | D12 | Don't ask the same person twice | After a pass, a `person` counts as a plain obstacle for **20 s** (tune on the robot). Known gap: a second person within 20 s isn't checked | Face matching (lookalikes, heavy); no skip at all; skip until the sensor reads clear | 1 |
 | D13 | After a person is cleared | Turn away with Lane 3's avoidance | Wait until they leave; hand back to the operator | 1, 3 |
 | D14 | Operator decision after 3 wrong passwords | Telegram **Allow** / **Deny** only. No decision gesture for Lane 2 | Thumbs-up gesture; both | 2, 4 |
-| D15 | Where the 30 s Telegram timeout lives | State machine. Alerts carry an id, decisions are JSON `{id, decision}`; on timeout the Telegram node removes the buttons and replies "expired" | Telegram node; no ids (an old button acts on a new alert) | 4 |
+| D15 | Where the 30 s Telegram timeout lives | State machine. Alerts carry an id, decisions are JSON `{id, decision}`; `/telegram/blocking` (new id) tells the Telegram node to expire the old buttons | Telegram node; no ids (an old button acts on a new alert) | 4 |
 | D28 | What starts `CLASSIFY` | Only an obstacle **appearing** (`/obstacle/detected` false → true). `forward` stays blocked while it's true | Any `true` (re-triggers forever after `failed` / `back`) | 1, 3 |
 | D29 | Person walks away during the password | Path clear for 5 s in `CHECKPOINT` → `/password/cancel`, back to `DRIVE` | Wait for the operator | 1, 4 |
-| D30 | Stuck states | `CHECKPOINT` with no result in 60 s → `WAIT_OPERATOR`; `AVOID` with no result in 10 s → `failed` | No timeouts | 1 |
+| D30 | Stuck states | `CHECKPOINT` with no result in 60 s → `/password/cancel`, `WAIT_OPERATOR`; `AVOID` with no result in 10 s → `/avoidance/cancel`, `failed` | No timeouts | 1 |
 
 ## C. Hardware, models and software
 

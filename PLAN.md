@@ -115,6 +115,8 @@ Decided: see [docs/decisions.md](docs/decisions.md) (Q1 = D11, Q2 = D12, Q3 = D1
 
 ## Open questions for Lane 4
 
+Decided: see [docs/decisions.md](docs/decisions.md) (Q1 = D23, Q2 = D9: replaced by a new `password_node`).
+
 1. What exactly does the person say: a fixed passphrase, spoken digits, or an
    answer to a question?
 2. What happens to the merged `src/password_system` finger-count package:
@@ -141,6 +143,8 @@ Decided: see [docs/decisions.md](docs/decisions.md) (Q1 = D11, Q2 = D12, Q3 = D1
    avoidance logic or Lane 1's state machine?
 
 ## Open questions for Lane 5
+
+Decided: see [docs/decisions.md](docs/decisions.md) (Q3 = D27: typed input stands in for the mic, Telegram is the real bot).
 
 1. What FPS counts as "good enough" for gesture control and YOLO together?
 2. What demo conditions do we test in: lighting, background noise, Wi-Fi?

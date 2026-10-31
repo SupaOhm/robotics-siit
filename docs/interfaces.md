@@ -61,8 +61,9 @@ package on `main` (Lane 4).
 | `/gesture/command` | `std_msgs/String` | gesture_node → state_machine | `forward`, `back`, `left`, `right`, `stop` or `none`. Sent at **10 Hz** (D3, D4) |
 | `/cmd_vel` | `geometry_msgs/Twist` | state_machine → base driver | The only command the wheels obey |
 
-- `none` means no hand is seen. It only counts as a heartbeat and never
-  moves or stops anything, so it doesn't interrupt `AVOID`.
+- `none` means no hand is seen. In `DRIVE` it sets the speed to zero, so
+  the robot never drives on without a hand. In every other state it only
+  counts as a heartbeat and doesn't interrupt anything (e.g. `AVOID`).
 - `stop` is a deliberate gesture and stops the wheels in every state.
 - The state machine turns words into speeds (parameters `linear_speed`,
   `angular_speed`). **No `/gesture/command` for 0.5 s → robot stops.**
@@ -82,7 +83,8 @@ Lane 3's `obstacle_avoidance` topics, with one change to
 | `/avoidance/result` | `std_msgs/String` | avoidance_node → state_machine | One per turn: `done`, `failed` or `cancelled` |
 
 **No `/obstacle/detected` for 1 s → the state machine treats the path as
-blocked.**
+blocked.** Silence only blocks `forward`. It never counts as an obstacle
+appearing, so it doesn't start `CLASSIFY`.
 
 ### Detection (Lane 2)
 
@@ -151,12 +153,14 @@ topic is never used on the robot.
 | Topic | Type | From → To | Meaning |
 |---|---|---|---|
 | `/telegram/alert` | `std_msgs/String` | state_machine → telegram_node | Alert id. Send a photo from `/camera/image_raw` with **Allow** / **Deny** buttons |
-| `/telegram/blocking` | `std_msgs/String` | state_machine → telegram_node | Alert id. Deny or timeout happened: send "Robot is blocking" with a **Resume** button |
+| `/telegram/blocking` | `std_msgs/String` | state_machine → telegram_node | A **new** alert id. Deny or timeout happened: send "Robot is blocking" with a **Resume** button |
 | `/telegram/decision` | `std_msgs/String` (JSON) | telegram_node → state_machine | `{"id": "a3", "decision": "allow"}`; `decision` is `allow`, `deny` or `resume` |
 
 - The state machine ignores a decision whose `id` isn't the current alert.
-- The 30 s timeout is in the state machine (D15). On timeout the Telegram
-  node removes the buttons and replies "expired".
+- The 30 s timeout is in the state machine (D15), so the Telegram node
+  learns of it from `/telegram/blocking`. On that message it removes the
+  old **Allow** / **Deny** buttons and replies "expired" if nobody pressed
+  them. On `allow`, `deny` or `resume` it removes the buttons it just used.
 
 ### State (Lane 1)
 
@@ -181,19 +185,19 @@ DRIVE ─obstacle appears─► CLASSIFY ─object / unknown─► ANNOUNCE ─�
                           │
                  deny / 30 s timeout
                           ▼
-                      BLOCKING ─resume─► AVOID
+                      BLOCKING ─resume / hold back─► AVOID
 ```
 
 | State | Wheels follow | Leaves when |
 |---|---|---|
-| `DRIVE` | Gestures; `forward` ignored while the path is blocked | `/obstacle/detected` **changes** from `false` to `true` |
+| `DRIVE` | Gestures (`none` = zero speed); `forward` ignored while the path is blocked | `/obstacle/detected` **changes** from `false` to `true` |
 | `CLASSIFY` | Stopped | `/detect/result` with the current id. No reply in 3 s → retry once with a new id. Still none → `CHECKPOINT` (never `unknown`) |
 | `ANNOUNCE` | Stopped | Clip requested, short pause |
-| `CHECKPOINT` | Stopped | `/password/result`; path clear for 5 s → `/password/cancel`, `DRIVE`; no result in 60 s → `WAIT_OPERATOR` |
+| `CHECKPOINT` | Stopped | `/password/result`; path clear for 5 s → `/password/cancel`, `DRIVE`; no result in 60 s → `/password/cancel`, `WAIT_OPERATOR` |
 | `PASS` | Stopped | Plays `password_correct` (after `granted`) or `operator_allowed` (after `allow`), short pause; starts the 20 s cleared window |
 | `WAIT_OPERATOR` | Stopped | `allow` / `deny` for the current alert id, or 30 s. `resume` is ignored here |
-| `BLOCKING` | Stopped, `alert` and `blocking` repeat | `resume` for the current alert id |
-| `AVOID` | `/avoidance/cmd_vel` | `/avoidance/result`; none in 10 s → counts as `failed` |
+| `BLOCKING` | Stopped, `alert` and `blocking` repeat | `resume` for the current alert id, or `back` held 1 s → `AVOID` |
+| `AVOID` | `/avoidance/cmd_vel` | `/avoidance/result`; none in 10 s → `/avoidance/cancel`, then handled as `failed` |
 
 - **Edge trigger:** `DRIVE` only reacts when an obstacle *appears*. After
   avoidance fails or the operator holds `back`, an obstacle that is still
@@ -202,9 +206,12 @@ DRIVE ─obstacle appears─► CLASSIFY ─object / unknown─► ANNOUNCE ─�
 - **Cleared window (D12):** for 20 s after `PASS`, a `person` result is
   handled as `unknown` ("Found an obstacle", turn away, no password).
 - **Avoidance failed (D6):** stop, play `found_obstacle`, back to `DRIVE`.
-- **Operator override (D11):** in any state except `DRIVE`, holding `back`
-  for 1 s cancels what is running (`/password/cancel`, `/avoidance/cancel`)
-  and returns to `DRIVE`. `stop` always stops the wheels.
+- **Operator override (D11):** in any state except `DRIVE` and `BLOCKING`,
+  holding `back` for 1 s cancels what is running (`/password/cancel`,
+  `/avoidance/cancel`) and returns to `DRIVE`. `stop` always stops the
+  wheels.
+- **Ending blocking (D11):** in `BLOCKING`, holding `back` for 1 s does the
+  same as **Resume**: go to `AVOID` and turn away from the person.
 
 ## Still open
 
