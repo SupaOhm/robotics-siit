@@ -28,8 +28,8 @@ people with a password.
 | Robot | Yahboom RosmasterPi A1, ROS 2 (`ament_python`, colcon) |
 | Gesture control | OpenCV + MediaPipe (existing code), runs on the operator's laptop and sends drive commands to the robot over ROS |
 | Object detection | Pretrained YOLO (COCO) + spoken name table (class to English phrase) |
-| Distance sensing | LiDAR or ultrasonic (TBD) |
-| Password | Spoken aloud into the robot's microphone; online speech recognition (what is said is TBD by Lane 4). The merged `src/password_system` finger-count package is superseded |
+| Distance sensing | See [D19](docs/decisions.md) (LiDAR if fitted, else front ultrasonic) |
+| Password | Spoken digits into the robot's USB microphone, recognised offline with Vosk (D22–D24). The merged `src/password_system` finger-count package is replaced by a new `password_node` |
 | Audio | Pre-recorded English clips |
 | Operator alert | Telegram bot |
 | Simulation | CoppeliaSim |
@@ -96,7 +96,7 @@ people with a password.
 | MediaPipe + YOLO together drop FPS on the robot | Benchmark by Oct 30; run YOLO only when the robot stops; lower resolution / alternate frames; fallback to laptop inference over Wi-Fi |
 | Low light hurts gesture and object recognition | Test in demo lighting early (Lane 5) |
 | YOLO doesn't know walls, doors, boxes | They fall back to "Found an obstacle" |
-| Telegram and online speech recognition need internet on the robot | Confirm Wi-Fi at the demo venue in Phase 1 |
+| Telegram needs internet on the robot | Confirm the phone hotspot works at the demo venue (D17) |
 | A noisy room breaks speech recognition of the spoken password | Test in demo noise early (Lane 5) |
 
 ## Open questions for Lane 1 (decide in Phase 1)

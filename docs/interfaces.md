@@ -3,8 +3,10 @@
 The contract between lanes. Lane 1 owns this file. If your PR adds, renames
 or changes a topic, update this file in the same PR and tag Lane 1.
 
-Status: **v0.2 (Oct 31), under review.** The reasons for each choice are in
-[decisions.md](decisions.md) (D-numbers below).
+Status: **v0.3 (Oct 31), under review.** v0.3 applies Lane 2's review on
+PR #4. The reasons for each choice are in [decisions.md](decisions.md)
+(D-numbers below). All timing values are starting points to tune on the
+robot.
 
 ## Rules
 
@@ -15,6 +17,8 @@ Status: **v0.2 (Oct 31), under review.** The reasons for each choice are in
   robot publishes its own `…/cmd_vel`, and the state machine forwards it (D2).
 - Every machine: `ROS_DOMAIN_ID=42`,
   `RMW_IMPLEMENTATION=rmw_cyclonedds_cpp`, on the phone hotspot (D16, D17).
+- Request/reply pairs that can arrive late carry an **id**. The state
+  machine ignores any reply whose id isn't the one it is waiting for.
 
 ## Nodes
 
@@ -30,7 +34,9 @@ Status: **v0.2 (Oct 31), under review.** The reasons for each choice are in
 | `telegram_node` | `telegram_alert` | 4 | Robot |
 
 Package names other than `obstacle_avoidance` are suggestions. The lane
-picks the final name and updates this table.
+picks the final name and updates this table. `password_node` is a new
+spoken-password node; it replaces the finger-count `src/password_system`
+package on `main` (Lane 4).
 
 ```
  laptop                           robot
@@ -52,51 +58,70 @@ picks the final name and updates this table.
 
 | Topic | Type | From → To | Meaning |
 |---|---|---|---|
-| `/gesture/command` | `std_msgs/String` | gesture_node → state_machine | `forward`, `back`, `left`, `right` or `stop`. Sent at **10 Hz**, also `stop` when no hand is seen, so it doubles as a heartbeat (D3, D4) |
+| `/gesture/command` | `std_msgs/String` | gesture_node → state_machine | `forward`, `back`, `left`, `right`, `stop` or `none`. Sent at **10 Hz** (D3, D4) |
 | `/cmd_vel` | `geometry_msgs/Twist` | state_machine → base driver | The only command the wheels obey |
 
-The state machine turns words into speeds (parameters `linear_speed`,
-`angular_speed`). **No `/gesture/command` for 0.5 s → robot stops.**
+- `none` means no hand is seen. It only counts as a heartbeat and never
+  moves or stops anything, so it doesn't interrupt `AVOID`.
+- `stop` is a deliberate gesture and stops the wheels in every state.
+- The state machine turns words into speeds (parameters `linear_speed`,
+  `angular_speed`). **No `/gesture/command` for 0.5 s → robot stops.**
 
-### Obstacles and avoidance (Lane 3, unchanged from `obstacle_avoidance`, D5)
+### Obstacles and avoidance (Lane 3, D5)
+
+Lane 3's `obstacle_avoidance` topics, with one change to
+`/obstacle/detected` (fixed rate, safe start; needs PR #3).
 
 | Topic | Type | From → To | Meaning |
 |---|---|---|---|
-| `/obstacle/detected` | `std_msgs/Bool` | avoidance_node → state_machine | `true` while blocked (0.30 m stop, 0.40 m clear), or while the sensor is silent |
+| `/obstacle/detected` | `std_msgs/Bool` | avoidance_node → state_machine | Published at a fixed **10 Hz**. `true` while blocked (0.30 m stop, 0.40 m clear), and `true` from start-up until the first valid reading |
 | `/obstacle/distance` | `std_msgs/Float32` | avoidance_node → anyone | Filtered front distance (m) |
 | `/avoidance/start` | `std_msgs/Empty` | state_machine → avoidance_node | Turn away from what is in front |
 | `/avoidance/cancel` | `std_msgs/Empty` | state_machine → avoidance_node | Stop turning |
 | `/avoidance/cmd_vel` | `geometry_msgs/Twist` | avoidance_node → state_machine | Turn command, only while turning |
 | `/avoidance/result` | `std_msgs/String` | avoidance_node → state_machine | One per turn: `done`, `failed` or `cancelled` |
 
+**No `/obstacle/detected` for 1 s → the state machine treats the path as
+blocked.**
+
 ### Detection (Lane 2)
 
 | Topic | Type | From → To | Meaning |
 |---|---|---|---|
 | `/camera/image_raw` | `sensor_msgs/Image` | camera driver → detector, telegram | Onboard camera (D21). Real topic name confirmed at bring-up |
-| `/detect/request` | `std_msgs/Empty` | state_machine → detector_node | Classify what is in front now (D7) |
-| `/detect/result` | `std_msgs/String` (JSON) | detector_node → state_machine | Exactly one reply per request (D8) |
+| `/detect/request` | `std_msgs/String` | state_machine → detector_node | Request id. Classify what is in front now (D7) |
+| `/detect/result` | `std_msgs/String` (JSON) | detector_node → state_machine | Exactly one reply per request, with the same `id` (D8) |
 
 ```json
-{"kind": "object",  "label": "chair",  "confidence": 0.82, "clip": "found_chair"}
-{"kind": "person",  "label": "person", "confidence": 0.91, "clip": null}
-{"kind": "unknown", "label": null,     "confidence": 0.0,  "clip": "found_obstacle"}
+{"id": "d7", "kind": "object",  "label": "chair",  "confidence": 0.82, "clip": "found_chair"}
+{"id": "d8", "kind": "person",  "label": "person", "confidence": 0.91, "clip": null}
+{"id": "d9", "kind": "unknown", "label": null,     "confidence": 0.0,  "clip": "found_obstacle"}
 ```
 
-`kind` is `object`, `person` or `unknown`. Low confidence or a class not in
-Lane 2's name table is `unknown`. `clip` is the audio clip id.
+- `kind` is `object`, `person` or `unknown`. `clip` is the audio clip id.
+- **Person first:** if any `person` in the frame is above the person
+  threshold, the result is `person`, whatever else is in frame.
+- Otherwise, low confidence or a class not in Lane 2's name table is
+  `unknown`.
 
 ### Password (Lane 4, D9, D23, D24)
 
 | Topic | Type | From → To | Meaning |
 |---|---|---|---|
 | `/password/start` | `std_msgs/Empty` | state_machine → password_node | Person found: start a session (3 attempts) |
-| `/password/cancel` | `std_msgs/Empty` | state_machine → password_node | Abort (operator took over) |
+| `/password/cancel` | `std_msgs/Empty` | state_machine → password_node | Abort: the operator took over, or the person walked away |
 | `/password/result` | `std_msgs/String` | password_node → state_machine | One per session: `granted`, `denied` (3 wrong) or `cancelled` |
 
-The password node plays its own prompts ("Say the password", "Wrong, try
-again") through `/audio/play`. The spoken digits are never published or
-logged.
+- The password node plays its own prompts through `/audio/play`
+  (`password_prompt`, `password_wrong`, `password_denied`).
+- Default engine: Vosk offline, vocabulary limited to the digits (D24).
+- What the person says is never published or logged, and the password
+  itself is kept out of the repo.
+
+**Simulation input (D27):** CoppeliaSim has no microphone. In sim mode the
+password node reads typed attempts from `/password/sim_input`
+(`std_msgs/String`) instead of the mic. Use a test password only; this
+topic is never used on the robot.
 
 ### Audio (Lane 4, D10, D25)
 
@@ -104,28 +129,34 @@ logged.
 |---|---|---|---|
 | `/audio/play` | `std_msgs/String` | anyone → audio_node | Clip id, e.g. `found_chair` |
 
-The audio node owns the cooldown (same clip not repeated within N s) and
-drops requests while a clip plays, except `alert`, which interrupts.
+- Requests that arrive while a clip plays are **queued**, not dropped.
+  `alert` interrupts and plays at once.
+- The cooldown (same clip not repeated within N s) applies only to
+  `found_*` clips.
 
-Clip ids the state machine uses:
-
-| Clip id | Says |
-|---|---|
-| `found_<label>` | "Found a chair", … (Lane 2's name table) |
-| `found_obstacle` | "Found an obstacle" |
-| `password_correct` | "Password correct, you may pass" |
-| `alert` | Alert sound |
-| `operator_allowed` | "The operator has allowed you to pass" |
+| Clip id | Says | Played by |
+|---|---|---|
+| `found_<label>` | "Found a chair", … (Lane 2's name table) | state_machine (`ANNOUNCE`) |
+| `found_obstacle` | "Found an obstacle" | state_machine (`ANNOUNCE`, avoidance failed) |
+| `password_prompt` | "Say the password" | password_node |
+| `password_wrong` | "Wrong, try again" | password_node |
+| `password_denied` | "Access denied, calling the operator" | password_node (after 3 wrong) |
+| `password_correct` | "Password correct, you may pass" | state_machine (`PASS` after `granted`) |
+| `operator_allowed` | "The operator has allowed you to pass" | state_machine (`PASS` after `allow`) |
+| `alert` | Alert sound | state_machine (`BLOCKING`) |
+| `blocking` | "You may not pass" | state_machine (`BLOCKING`) |
 
 ### Telegram (Lane 4, D11, D14, D15, D26)
 
 | Topic | Type | From → To | Meaning |
 |---|---|---|---|
-| `/telegram/alert` | `std_msgs/Empty` | state_machine → telegram_node | Send a photo from `/camera/image_raw` with **Allow** / **Deny** buttons |
-| `/telegram/blocking` | `std_msgs/Empty` | state_machine → telegram_node | Deny or timeout happened: send "Robot is blocking" with a **Resume** button |
-| `/telegram/decision` | `std_msgs/String` | telegram_node → state_machine | `allow`, `deny` or `resume` |
+| `/telegram/alert` | `std_msgs/String` | state_machine → telegram_node | Alert id. Send a photo from `/camera/image_raw` with **Allow** / **Deny** buttons |
+| `/telegram/blocking` | `std_msgs/String` | state_machine → telegram_node | Alert id. Deny or timeout happened: send "Robot is blocking" with a **Resume** button |
+| `/telegram/decision` | `std_msgs/String` (JSON) | telegram_node → state_machine | `{"id": "a3", "decision": "allow"}`; `decision` is `allow`, `deny` or `resume` |
 
-The 30 s timeout is in the state machine (D15).
+- The state machine ignores a decision whose `id` isn't the current alert.
+- The 30 s timeout is in the state machine (D15). On timeout the Telegram
+  node removes the buttons and replies "expired".
 
 ### State (Lane 1)
 
@@ -136,31 +167,38 @@ The 30 s timeout is in the state machine (D15).
 ## State machine
 
 ```
-DRIVE ─obstacle─► CLASSIFY ─object / unknown─► ANNOUNCE ─► AVOID ─done─► DRIVE
-                     │                                       │
-                     │                                    failed ─► DRIVE (operator)
-                     └─person─► CHECKPOINT ─granted─► PASS ─► AVOID
-                                    │
-                                 denied
-                                    ▼
-                              WAIT_OPERATOR ─allow─► PASS
-                                    │
-                           deny / 30 s timeout
-                                    ▼
-                                BLOCKING ─resume─► AVOID
+DRIVE ─obstacle appears─► CLASSIFY ─object / unknown─► ANNOUNCE ─► AVOID ─done─► DRIVE
+                             │                                       │
+                     person, or no reply                     failed / 10 s ─► DRIVE (operator)
+                     after one retry
+                             ▼
+                        CHECKPOINT ─granted─► PASS ─► AVOID
+                          │    │
+                          │  path clear 5 s ─► DRIVE (password cancelled)
+                   denied / 60 s
+                          ▼
+                    WAIT_OPERATOR ─allow─► PASS
+                          │
+                 deny / 30 s timeout
+                          ▼
+                      BLOCKING ─resume─► AVOID
 ```
 
 | State | Wheels follow | Leaves when |
 |---|---|---|
-| `DRIVE` | Gestures; `forward` ignored while `/obstacle/detected` | Obstacle detected |
-| `CLASSIFY` | Stopped | `/detect/result`, or 3 s → `unknown` |
+| `DRIVE` | Gestures; `forward` ignored while the path is blocked | `/obstacle/detected` **changes** from `false` to `true` |
+| `CLASSIFY` | Stopped | `/detect/result` with the current id. No reply in 3 s → retry once with a new id. Still none → `CHECKPOINT` (never `unknown`) |
 | `ANNOUNCE` | Stopped | Clip requested, short pause |
-| `CHECKPOINT` | Stopped | `/password/result` |
-| `PASS` | Stopped | Clip requested, short pause; starts the 20 s cleared window |
-| `WAIT_OPERATOR` | Stopped | `/telegram/decision`, or 30 s |
-| `BLOCKING` | Stopped, alert repeats | `resume` |
-| `AVOID` | `/avoidance/cmd_vel` | `/avoidance/result` |
+| `CHECKPOINT` | Stopped | `/password/result`; path clear for 5 s → `/password/cancel`, `DRIVE`; no result in 60 s → `WAIT_OPERATOR` |
+| `PASS` | Stopped | Plays `password_correct` (after `granted`) or `operator_allowed` (after `allow`), short pause; starts the 20 s cleared window |
+| `WAIT_OPERATOR` | Stopped | `allow` / `deny` for the current alert id, or 30 s. `resume` is ignored here |
+| `BLOCKING` | Stopped, `alert` and `blocking` repeat | `resume` for the current alert id |
+| `AVOID` | `/avoidance/cmd_vel` | `/avoidance/result`; none in 10 s → counts as `failed` |
 
+- **Edge trigger:** `DRIVE` only reacts when an obstacle *appears*. After
+  avoidance fails or the operator holds `back`, an obstacle that is still
+  there doesn't re-trigger `CLASSIFY`. `forward` stays blocked, so the
+  operator turns or backs out.
 - **Cleared window (D12):** for 20 s after `PASS`, a `person` result is
   handled as `unknown` ("Found an obstacle", turn away, no password).
 - **Avoidance failed (D6):** stop, play `found_obstacle`, back to `DRIVE`.
@@ -170,6 +208,11 @@ DRIVE ─obstacle─► CLASSIFY ─object / unknown─► ANNOUNCE ─► AVOID
 
 ## Still open
 
-- Real camera topic name and the sensor fitted (bring-up, D19, D21).
-- Detector confidence threshold for `person` (Lane 2).
-- Password length and the digits themselves (Lane 4; kept out of the repo).
+| Question | Owner |
+|---|---|
+| Real camera topic name and the sensor fitted (bring-up, D19, D21) | Lane 1 |
+| Detector confidence threshold for `person` | Lane 2 |
+| How far `AVOID` turns, what counts as clear, and the sensor's coverage (front only or wider) | Lane 3 |
+| Time limit per YOLO frame on the robot before it moves to the laptop (D18). Must fit the 3 s `CLASSIFY` timeout plus one retry | Lane 5 |
+| Removing the finger-count `src/password_system` package once `password_node` lands | Lane 4 |
+| Password length and the password itself (kept out of the repo) | Lane 4 |
