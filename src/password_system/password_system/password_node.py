@@ -1,74 +1,76 @@
 """ROS 2 node: spoken-password check for the security checkpoint.
 
-Topics (all std_msgs, so no custom message package is needed):
-  sub  /password/start   Empty   begin a session (main state machine, person seen)
-  sub  /password/cancel  Empty   abort the session (e.g. person walked away)
-  sub  /password/text    String  one attempt as text, input_mode == "topic_only"
-                                 (simulation / testing; "" = nobody spoke)
-  pub  /password/result  String  "granted" | "denied" | "cancelled"  (once per session)
-  pub  /password/event   String  JSON progress events for audio / UI
+Follows docs/interfaces.md (contract v0.3, D9, D23, D24, D27):
+  sub  /password/start      Empty   begin a session (person found), 3 attempts
+  sub  /password/cancel     Empty   abort (operator took over / person left)
+  sub  /password/sim_input  String  one typed attempt, input_mode == "sim" only
+                                    ("" = nobody spoke)
+  pub  /password/result     String  "granted" | "denied" | "cancelled", once per session
+  pub  /audio/play          String  password_prompt / password_wrong / password_denied
+
+The password is not in the repo: the salted hash comes from the environment
+(ROBOT_PASSWORD_SALT, ROBOT_PASSWORD_HASH, ROBOT_PASSWORD_CHARS, printed by
+make_password_hash) unless the parameters are set. What the person says is
+never published or logged.
 
 In "mic" mode a worker thread runs the listen -> transcribe -> check loop,
 waiting ``listen_delay`` seconds before each attempt so the robot's own
 prompt clip is not recorded.
 """
 
-import json
+import os
 import threading
 
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Empty, String
 
-from .verifier import EventType, PasswordVerifier
-
-RESULT_FOR_EVENT = {
-    EventType.GRANTED: "granted",
-    EventType.LOCKED_OUT: "denied",
-    EventType.CANCELLED: "cancelled",
-}
+from .verifier import PasswordVerifier, outputs_for
 
 
 class PasswordNode(Node):
     def __init__(self):
         super().__init__("password_node")
         p = self.declare_parameter
-        p("password_hash", "")
-        p("salt", "")
-        p("password_chars", 4)
+        p("password_hash", "")  # empty -> ROBOT_PASSWORD_HASH
+        p("salt", "")  # empty -> ROBOT_PASSWORD_SALT
+        p("password_chars", 0)  # 0 -> ROBOT_PASSWORD_CHARS
         p("max_attempts", 3)
         p("match_mode", "contains")  # contains | exact
         p("max_service_errors", 3)
-        p("input_mode", "mic")  # mic | topic_only
-        p("engine", "google")  # google | vosk
+        p("input_mode", "mic")  # mic | sim
+        p("engine", "vosk")  # vosk | google
         p("language", "en-US")
         p("mic_device_index", -1)  # -1 = system default microphone
         p("vosk_model_path", "")
         p("listen_delay", 2.5)
         p("listen_timeout", 6.0)
         p("phrase_time_limit", 5.0)
-        p("log_transcripts", False)  # only for tuning: prints what was heard
 
         g = lambda name: self.get_parameter(name).value
-        if not g("password_hash") or not g("salt"):
-            raise RuntimeError("password_hash and salt must be set (see make_password_hash)")
+        password_hash = g("password_hash") or os.environ.get("ROBOT_PASSWORD_HASH", "")
+        salt = g("salt") or os.environ.get("ROBOT_PASSWORD_SALT", "")
+        chars = int(g("password_chars") or os.environ.get("ROBOT_PASSWORD_CHARS", 0))
+        if not password_hash or not salt or chars < 1:
+            raise RuntimeError(
+                "No password set. Run `ros2 run password_system make_password_hash "
+                "<digits>` and export the ROBOT_PASSWORD_* lines it prints.")
 
         self.verifier = PasswordVerifier(
-            password_hash=g("password_hash"),
-            salt=g("salt"),
-            password_chars=int(g("password_chars")),
+            password_hash=password_hash,
+            salt=salt,
+            password_chars=chars,
             max_attempts=int(g("max_attempts")),
             match_mode=g("match_mode"),
             max_service_errors=int(g("max_service_errors")),
         )
         self.listen_delay = float(g("listen_delay"))
-        self.log_transcripts = bool(g("log_transcripts"))
         self.lock = threading.Lock()
         self._cancel = threading.Event()
         self._worker = None
 
         self.result_pub = self.create_publisher(String, "/password/result", 10)
-        self.event_pub = self.create_publisher(String, "/password/event", 10)
+        self.audio_pub = self.create_publisher(String, "/audio/play", 10)
         self.create_subscription(Empty, "/password/start", self.on_start, 10)
         self.create_subscription(Empty, "/password/cancel", self.on_cancel, 10)
 
@@ -85,22 +87,24 @@ class PasswordNode(Node):
                 phrase_time_limit=float(g("phrase_time_limit")),
                 vosk_model_path=g("vosk_model_path"),
             )
-        elif self.mode == "topic_only":
-            self.create_subscription(String, "/password/text", self.on_text, 10)
+        elif self.mode == "sim":
+            self.create_subscription(String, "/password/sim_input", self.on_sim_input, 10)
         else:
             raise RuntimeError("unknown input_mode: %s" % self.mode)
 
         self.get_logger().info(
-            "password_node ready (mode=%s, engine=%s, language=%s, attempts=%d)"
-            % (self.mode, g("engine"), g("language"), self.verifier.max_attempts))
+            "password_node ready (mode=%s, engine=%s, attempts=%d)"
+            % (self.mode, g("engine"), self.verifier.max_attempts))
 
     def publish(self, events) -> None:
         for ev in events:
-            self.event_pub.publish(String(data=json.dumps(ev.to_dict())))
-            self.get_logger().info("event: %s (attempts left %d)"
+            self.get_logger().info("%s (attempts left %d)"
                                    % (ev.type.value, ev.attempts_left))
-            if ev.type in RESULT_FOR_EVENT:
-                self.result_pub.publish(String(data=RESULT_FOR_EVENT[ev.type]))
+        results, clips = outputs_for(events)
+        for clip in clips:
+            self.audio_pub.publish(String(data=clip))
+        for result in results:
+            self.result_pub.publish(String(data=result))
 
     def on_start(self, _msg) -> None:
         with self.lock:
@@ -118,7 +122,7 @@ class PasswordNode(Node):
             self._cancel.set()
             self.publish(self.verifier.cancel())
 
-    def on_text(self, msg) -> None:
+    def on_sim_input(self, msg) -> None:
         with self.lock:
             if msg.data.strip():
                 self.publish(self.verifier.submit([msg.data]))
@@ -132,7 +136,6 @@ class PasswordNode(Node):
             with self.lock:
                 if cancel.is_set() or not self.verifier.active:
                     return
-                self.publish(self.verifier.listening())
 
             result = self.listener.listen_once()
 
@@ -145,8 +148,6 @@ class PasswordNode(Node):
                     self.get_logger().warning(result.error)
                     events = self.verifier.service_error()
                 else:
-                    if self.log_transcripts:
-                        self.get_logger().info("heard: %s" % result.candidates)
                     events = self.verifier.submit(result.candidates)
                 self.publish(events)
                 if not self.verifier.active:

@@ -1,7 +1,8 @@
 import pytest
 
 from password_system.normalize import normalize
-from password_system.verifier import EventType, PasswordVerifier, hash_password
+from password_system.verifier import (EventType, PasswordVerifier, hash_password,
+                                      outputs_for)
 
 SALT = "testsalt"
 
@@ -103,7 +104,6 @@ def test_inactive_session_ignores_input():
     assert v.submit(["1352"]) == []
     assert v.no_speech() == []
     assert v.service_error() == []
-    assert v.listening() == []
 
 
 def test_cancel():
@@ -132,3 +132,39 @@ def test_event_dict_has_no_transcript():
     v = make()
     ev = v.start()[0].to_dict()
     assert ev == {"type": "started", "attempts_left": 3}
+
+
+def test_outputs_start_plays_prompt():
+    v = make()
+    assert outputs_for(v.start()) == ([], ["password_prompt"])
+
+
+def test_outputs_wrong_and_silence_play_wrong():
+    v = make()
+    v.start()
+    assert outputs_for(v.submit(["1111"])) == ([], ["password_wrong"])
+    assert outputs_for(v.no_speech()) == ([], ["password_wrong"])
+
+
+def test_outputs_last_failure_plays_only_denied():
+    v = make()
+    v.start()
+    v.submit(["1111"])
+    v.submit(["2222"])
+    assert outputs_for(v.submit(["3333"])) == (["denied"], ["password_denied"])
+
+
+def test_outputs_granted_and_cancelled_have_no_clip():
+    # password_correct is played by the state machine (PASS), not this node
+    v = make()
+    v.start()
+    assert outputs_for(v.submit(["1352"])) == (["granted"], [])
+    v.start()
+    assert outputs_for(v.cancel()) == (["cancelled"], [])
+
+
+def test_outputs_service_errors():
+    v = make(max_service_errors=2)
+    v.start()
+    assert outputs_for(v.service_error()) == ([], [])
+    assert outputs_for(v.service_error()) == (["denied"], ["password_denied"])

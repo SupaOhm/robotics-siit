@@ -16,14 +16,13 @@ import hmac
 import secrets
 from dataclasses import dataclass
 from enum import Enum
-from typing import Iterable, List
+from typing import Iterable, List, Tuple
 
 from .normalize import normalize
 
 
 class EventType(str, Enum):
     STARTED = "started"            # session began, play the password prompt
-    LISTENING = "listening"        # microphone is open, waiting for speech
     WRONG = "wrong"                # heard something, but not the password
     NO_SPEECH = "no_speech"        # nobody spoke in time
     UNCLEAR = "unclear"            # speech heard but could not be transcribed
@@ -35,6 +34,21 @@ class EventType(str, Enum):
 
 MATCH_MODES = ("contains", "exact")
 
+# What the state machine reads on /password/result (docs/interfaces.md)
+RESULT_FOR_EVENT = {
+    EventType.GRANTED: "granted",
+    EventType.LOCKED_OUT: "denied",
+    EventType.CANCELLED: "cancelled",
+}
+# Prompts the password node plays itself on /audio/play
+CLIP_FOR_EVENT = {
+    EventType.STARTED: "password_prompt",
+    EventType.WRONG: "password_wrong",
+    EventType.NO_SPEECH: "password_wrong",
+    EventType.UNCLEAR: "password_wrong",
+    EventType.LOCKED_OUT: "password_denied",
+}
+
 
 @dataclass
 class Event:
@@ -43,6 +57,17 @@ class Event:
 
     def to_dict(self) -> dict:
         return {"type": self.type.value, "attempts_left": self.attempts_left}
+
+
+def outputs_for(events) -> Tuple[List[str], List[str]]:
+    """(results, clips) to publish for one batch of events. The last failure
+    plays only "password_denied", not "password_wrong" first."""
+    types = [ev.type for ev in events]
+    results = [RESULT_FOR_EVENT[t] for t in types if t in RESULT_FOR_EVENT]
+    clips = [CLIP_FOR_EVENT[t] for t in types if t in CLIP_FOR_EVENT]
+    if EventType.LOCKED_OUT in types:
+        clips = [c for c in clips if c != "password_wrong"]
+    return results, clips
 
 
 def hash_password(normalized: str, salt: str) -> str:
@@ -116,9 +141,6 @@ class PasswordVerifier:
         self.attempts_used = 0
         self._service_errors = 0
         return [self._event(EventType.STARTED)]
-
-    def listening(self) -> List[Event]:
-        return [self._event(EventType.LISTENING)] if self.active else []
 
     def cancel(self) -> List[Event]:
         if not self.active:

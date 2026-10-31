@@ -1,7 +1,7 @@
 """Try the spoken password on a laptop microphone, no ROS needed.
 
-    pip install SpeechRecognition pyaudio        # + vosk for --engine vosk
-    python -m password_system.mic_demo --password "one three five two"
+    pip install SpeechRecognition pyaudio vosk
+    python -m password_system.mic_demo --password 4719      # any test digits
 
 Press Enter to start a session, Ctrl+C to quit.
 """
@@ -15,8 +15,8 @@ from .verifier import EventType, PasswordVerifier, hash_password, make_salt
 
 def main(argv=None):
     parser = argparse.ArgumentParser()
-    parser.add_argument("--password", default="one three five two")
-    parser.add_argument("--engine", choices=ENGINES, default="google")
+    parser.add_argument("--password", required=True, help="a test password, e.g. 4719")
+    parser.add_argument("--engine", choices=ENGINES, default="vosk")
     parser.add_argument("--language", default="en-US")
     parser.add_argument("--device", type=int, default=None, help="microphone index")
     parser.add_argument("--vosk-model", default="")

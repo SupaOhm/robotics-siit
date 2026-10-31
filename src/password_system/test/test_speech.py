@@ -1,6 +1,6 @@
 import json
 
-from password_system.speech import google_candidates, vosk_candidates
+from password_system.speech import VOSK_GRAMMAR, google_candidates, vosk_candidates
 
 
 def test_google_candidates():
@@ -31,3 +31,16 @@ def test_vosk_alternatives():
                              {"confidence": 10.0, "text": ""}]}
     assert vosk_candidates(json.dumps(data)) == ["one three five two",
                                                  "one three five to"]
+
+
+def test_vosk_unk_words_dropped():
+    assert vosk_candidates(json.dumps({"text": "[unk] one three [unk] five two"})) == [
+        "one three five two"]
+    assert vosk_candidates(json.dumps({"text": "[unk]"})) == []
+
+
+def test_vosk_grammar_is_digit_words():
+    words = json.loads(VOSK_GRAMMAR)
+    assert "[unk]" in words
+    assert {"zero", "one", "two", "three", "four", "five", "six", "seven",
+            "eight", "nine"} <= set(words)

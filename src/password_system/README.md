@@ -1,83 +1,90 @@
 # password_system (Lane 4, spoken password)
 
-When the robot finds a person, it asks for a **spoken password**. The
-microphone records the answer, a speech engine turns it into text, and the
-text is checked. The demo password is **"one three five two"**. The person
-gets **3 attempts**. After 3 failures the node reports `denied`, and the main
-state machine starts the alert and Telegram flow.
+`password_node`: when the robot finds a person, it asks for the password.
+The person **says the digits** into the robot's USB microphone. The node
+recognizes them **offline with Vosk**, using a vocabulary of digit words
+only, and checks them. The person gets **3 attempts**. After 3 failures the
+node reports `denied`, and the state machine starts the alert and Telegram
+flow.
 
-ROS 2 (`ament_python`) package. The logic is plain Python, so it can be
-tested and tried on a laptop without ROS.
+This follows the contract in `docs/interfaces.md` (v0.3: D9, D23, D24, D27).
+It's a ROS 2 `ament_python` package. The logic is plain Python, so the tests
+run anywhere without ROS or a microphone.
 
-## What counts as an attempt
-
-| What happened | Event | Costs an attempt? |
-|---|---|---|
-| Said the password | `granted` | Session ends, access granted |
-| Said something else | `wrong` | Yes |
-| Nobody spoke within `listen_timeout` (6 s) | `no_speech` | Yes |
-| Spoke, but nothing could be transcribed | `unclear` | Yes |
-| Speech engine failed (no internet, mic error) | `service_error` | No. But 3 in a row ends the session as `denied`, so the operator decides on Telegram |
-
-Speech engines write the same words in different ways, so the text is
-**normalized** before comparing: "one three five two", "1 3 5 2", "1,352"
-and "หนึ่ง สาม ห้า สอง" all become `1352`. Case, spaces and punctuation are
-ignored. Common homophones are mapped too ("to" / "too" become 2, "for"
-becomes 4). In the default `contains` mode, extra words are fine: "the
-password is one three five two" passes.
-
-## Interface (for the main state machine, audio, and Telegram)
-
-All messages are standard `std_msgs`, so there is no custom message package.
+## Interface
 
 | Topic | Type | Direction | Meaning |
 |---|---|---|---|
-| `/password/start` | `std_msgs/Empty` | in | Person detected: start a session (resets attempts) |
-| `/password/cancel` | `std_msgs/Empty` | in | Abort the session (e.g. person left) |
-| `/password/result` | `std_msgs/String` | out | Exactly one per session: `granted`, `denied` (send the alert), or `cancelled` |
-| `/password/event` | `std_msgs/String` (JSON) | out | Progress, for audio prompts and UI |
-| `/password/text` | `std_msgs/String` | in | One attempt as text, only in `input_mode: topic_only` (sim / testing). `""` = nobody spoke |
+| `/password/start` | `std_msgs/Empty` | in | Person found: start a session (3 attempts) |
+| `/password/cancel` | `std_msgs/Empty` | in | Abort: the operator took over, or the person left |
+| `/password/result` | `std_msgs/String` | out | One per session: `granted`, `denied` or `cancelled` |
+| `/audio/play` | `std_msgs/String` | out | The node's own prompts (see below) |
+| `/password/sim_input` | `std_msgs/String` | in | One typed attempt, `input_mode: sim` only (D27). `""` = nobody spoke |
 
-Event JSON: `{"type": "wrong", "attempts_left": 2}`
-
-| `type` | Suggested audio clip (P6) |
+| When | Clip on `/audio/play` |
 |---|---|
-| `started` | "Please say the password." |
-| `listening` | Short beep: the mic is open now |
-| `wrong` | "Wrong password, please try again." |
-| `no_speech` / `unclear` | "Sorry, I didn't hear that. Please try again." |
-| `service_error` | None, or "Please wait." |
-| `granted` | "Password verified. You may pass." |
-| `locked_out` | Alert sound (the state machine also gets `denied` on `/password/result`) |
-| `cancelled` | None |
+| Session starts | `password_prompt`: "Say the password" |
+| Wrong digits, silence or unclear speech (attempts left) | `password_wrong`: "Wrong, try again" |
+| Third failure | `password_denied`: "Access denied, calling the operator" (instead of `password_wrong`) |
+| `granted` | None. The state machine plays `password_correct` in `PASS` |
 
-What was heard is never published, and is logged only when
-`log_transcripts: true` (use that just for tuning).
+What the person says is never published or logged.
 
-**Microphone vs. speaker:** after `started` and after each failure, the node
-waits `listen_delay` (2.5 s) before it opens the mic, so the robot doesn't
-record its own prompt. Each clip that plays before listening must be shorter
-than that, or raise `listen_delay`.
+## What counts as an attempt
 
-Expected use by the main state machine:
+| What happened | Costs an attempt? |
+|---|---|
+| Said the right digits | No: `granted` |
+| Said other digits | Yes |
+| Nobody spoke within `listen_timeout` (6 s) | Yes |
+| Spoke, but no digit was recognized | Yes |
+| Microphone or speech engine failed | No. But 3 in a row end the session as `denied`, so the operator decides |
 
-```
-person detected  -> publish /password/start
-/password/result == "granted"   -> confirm out loud, mark safe, pass
-/password/result == "denied"    -> alert sound + Telegram photo with Allow/Deny
-person gone                     -> publish /password/cancel
-```
+Before each attempt the node waits `listen_delay` (2.5 s), so it doesn't
+record its own prompt clip. The prompt clips must be shorter than that.
+Worst case is 3 attempts of about 14 s each, which fits the state machine's
+60 s `CHECKPOINT` timeout.
 
-## Install
+The recognized words are normalized before checking: "four seven one nine",
+"4 7 1 9" and "4719" are the same. The homophones "to" / "too" (2), "for"
+(4) and "oh" (0) count too. In the default `contains` mode, words around
+the digits are ignored. Vosk turns any non-digit word into `[unk]`, which
+is dropped.
+
+## Setting the password (kept out of the repo)
+
+The password and its hash are never committed. With 4 digits, a committed
+hash can be cracked in milliseconds. On the robot:
 
 ```bash
-# On the robot (Ubuntu + ROS 2 Humble)
-sudo apt install portaudio19-dev python3-pyaudio flac
-pip install SpeechRecognition
-pip install vosk                      # only for engine: vosk (offline)
+ros2 run password_system make_password_hash 4 7 1 9   # your digits, not these
 ```
 
-`flac` is needed by the Google engine on Linux.
+It prints three lines:
+
+```bash
+export ROBOT_PASSWORD_SALT=...
+export ROBOT_PASSWORD_HASH=...
+export ROBOT_PASSWORD_CHARS=4
+```
+
+Add them to the robot's `~/.bashrc`, or to the gitignored `.env`, and load
+it before launching. The node refuses to start if they're missing. Share
+the real password with the team privately, not in the repo or on GitHub.
+In simulation, use a different test password.
+
+## Install (robot: Ubuntu 22.04, ROS 2 Humble)
+
+```bash
+sudo apt install portaudio19-dev python3-pyaudio
+pip install SpeechRecognition vosk
+```
+
+The first start downloads Vosk's small English model (about 40 MB) through
+the hotspot. To avoid that at the demo, download
+`vosk-model-small-en-us-0.15` from https://alphacephei.com/vosk/models
+once, unzip it on the robot, and set `vosk_model_path`. Don't commit the
+model.
 
 ## Build and run
 
@@ -86,64 +93,37 @@ cd <repo root>
 colcon build --packages-select password_system
 source install/setup.bash
 
-# On the robot, with the microphone
-ros2 launch password_system password.launch.py               # google, en-US
-ros2 launch password_system password.launch.py engine:=vosk  # offline
+# Robot, USB microphone, Vosk offline
+ros2 launch password_system password.launch.py
 
-# Simulation / no microphone: type attempts as text
-ros2 launch password_system password.launch.py input_mode:=topic_only
+# Simulation (D27): typed attempts instead of the mic
+ros2 launch password_system password.launch.py input_mode:=sim
 ros2 topic pub --once /password/start std_msgs/msg/Empty
-ros2 topic pub --once /password/text std_msgs/msg/String "{data: 'one three five two'}"
+ros2 topic pub --once /password/sim_input std_msgs/msg/String "{data: '4 7 1 9'}"
 ros2 topic echo /password/result
 ```
 
-To pick the microphone, list the devices and set `mic_device_index` in
-[config/password.yaml](config/password.yaml):
+To pick the USB microphone, list the devices, then set `mic_device_index`
+in [config/password.yaml](config/password.yaml):
 
 ```bash
 python3 -c "import speech_recognition as sr; print(list(enumerate(sr.Microphone.list_microphone_names())))"
 ```
 
-### Choosing the engine
+**Fallback engine:** `engine:=google` uses Google Web Speech instead. It
+needs the hotspot's internet, and it's unofficial and can fail. Only use it
+if Vosk does badly in the venue.
 
-| | `google` (default) | `vosk` |
-|---|---|---|
-| Internet | Needed (the robot needs it for Telegram anyway) | Not needed |
-| Accuracy | Best | Good for short English words and digits |
-| Speed on the Pi | About 1 s round trip | Runs locally, small model is fine on a Pi |
-| Thai | `language: th-TH` | No official Thai model |
-
-If the venue Wi-Fi is unreliable, switch to `vosk`. The first run downloads
-the small English model (about 40 MB). Or download it once and set
-`vosk_model_path`.
-
-### Change the password
+## Try it on a laptop microphone (no ROS)
 
 ```bash
-ros2 run password_system make_password_hash four two seven one
-```
-
-Paste the printed `password_chars`, `salt` and `password_hash` into
-[config/password.yaml](config/password.yaml). Only a salted SHA-256 of the
-normalized text is stored, so the password isn't readable in the repo.
-
-Pick digits or short, distinct words, which speech engines get right. A
-spoken password can be overheard, and 4 digits is a small keyspace, so this
-is a checkpoint demo, not real security. The 3-attempt limit is what
-protects it.
-
-### Try it on a laptop microphone (no ROS)
-
-```bash
-pip install SpeechRecognition pyaudio
+pip install SpeechRecognition pyaudio vosk
 cd src/password_system
-python -m password_system.mic_demo                      # password "one three five two"
-python -m password_system.mic_demo --engine vosk
-python -m password_system.mic_demo --language th-TH --password "เปิด ประตู"
+python -m password_system.mic_demo --password 4719        # a test password
 ```
 
 Press Enter to start a session. The demo prints what it heard, so you can
-check recognition before tuning.
+check recognition. This is a local tool; the node itself never logs it.
 
 ## Tests
 
@@ -152,10 +132,9 @@ cd src/password_system
 python -m pytest test
 ```
 
-These cover normalization (digit words, Thai, punctuation), the verifier
-(grant, `contains` vs `exact`, 3-strike lockout, silence and unclear speech,
-service errors, cancel), and parsing of Google / Vosk results. No microphone
-is needed.
+These cover normalization, the verifier (grant, 3-strike lockout, silence,
+unclear speech, engine errors, cancel), which clips and results each step
+publishes, and Vosk / Google result parsing.
 
 ## Tuning
 
@@ -165,20 +144,20 @@ is needed.
 | `listen_timeout` | 6 s | People need longer before they start talking |
 | `phrase_time_limit` | 5 s | Answers get cut off |
 | `match_mode` | `contains` | Use `exact` to reject extra words |
-| `max_service_errors` | 3 | Engine failures before handing over to the operator |
+| `max_service_errors` | 3 | Mic or engine failures before handing over to the operator |
 | `mic_device_index` | -1 | The wrong microphone is used |
 
 ## Files
 
 ```
 password_system/
-  verifier.py       attempts / lockout state machine (no ROS)
-  normalize.py      transcription -> comparable text (digit words, Thai, punctuation)
-  speech.py         microphone + google / vosk speech-to-text
-  password_node.py  ROS 2 node wiring the above to topics
-  hash_tool.py      make_password_hash CLI
+  verifier.py       attempts / lockout state machine, result + clip mapping (no ROS)
+  normalize.py      recognized words -> digits ("four seven" -> "47")
+  speech.py         microphone + Vosk (digits grammar) / Google speech-to-text
+  password_node.py  ROS 2 node (contract v0.3)
+  hash_tool.py      make_password_hash: prints the ROBOT_PASSWORD_* lines
   mic_demo.py       laptop demo without ROS
-config/password.yaml
+config/password.yaml   tuning only, no password
 launch/password.launch.py
 test/
 ```

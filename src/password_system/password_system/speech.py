@@ -1,9 +1,11 @@
 """Microphone capture + speech-to-text for the spoken password.
 
 Engines:
-  google  Google Web Speech via the SpeechRecognition package. Good accuracy,
-          many languages (en-US, th-TH, ...), needs internet.
-  vosk    Offline Vosk model, light enough for a Raspberry Pi.
+  vosk    Offline Vosk model, light enough for a Raspberry Pi. Its vocabulary
+          is limited to the digit words, which makes digits far more reliable
+          (default, contract D24).
+  google  Google Web Speech via the SpeechRecognition package. Needs internet,
+          any words, many languages. Fallback only.
 
 Third-party packages are imported lazily so the parsing helpers can be
 tested without them.
@@ -13,7 +15,12 @@ import json
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-ENGINES = ("google", "vosk")
+ENGINES = ("vosk", "google")
+
+# Vosk grammar: only these words can be recognized; anything else -> "[unk]".
+DIGIT_WORDS = ["zero", "oh", "one", "two", "three", "four", "five", "six",
+               "seven", "eight", "nine"]
+VOSK_GRAMMAR = json.dumps(DIGIT_WORDS + ["[unk]"])
 
 
 @dataclass
@@ -39,13 +46,15 @@ def vosk_candidates(result_json: str) -> List[str]:
         texts = [a.get("text", "") for a in data["alternatives"]]
     else:
         texts = [data.get("text", "")]
-    return [t for t in texts if t.strip()]
+    # "[unk]" marks a non-digit word; drop it so "[unk]" alone counts as unclear
+    texts = [" ".join(w for w in t.split() if w != "[unk]") for t in texts]
+    return [t for t in texts if t]
 
 
 class SpeechListener:
     def __init__(
         self,
-        engine: str = "google",
+        engine: str = "vosk",
         language: str = "en-US",
         device_index: Optional[int] = None,
         listen_timeout: float = 6.0,
@@ -112,7 +121,7 @@ class SpeechListener:
             return google_candidates(response)
 
         from vosk import KaldiRecognizer
-        rec = KaldiRecognizer(self._vosk_model, 16000)
+        rec = KaldiRecognizer(self._vosk_model, 16000, VOSK_GRAMMAR)
         rec.SetMaxAlternatives(3)
         rec.AcceptWaveform(audio.get_raw_data(convert_rate=16000, convert_width=2))
         return vosk_candidates(rec.FinalResult())

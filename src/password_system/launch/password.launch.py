@@ -12,8 +12,7 @@ def generate_launch_description():
                           "config", "password.yaml")
     return LaunchDescription([
         DeclareLaunchArgument("input_mode", default_value="mic"),
-        DeclareLaunchArgument("engine", default_value="google"),
-        DeclareLaunchArgument("language", default_value="en-US"),
+        DeclareLaunchArgument("engine", default_value="vosk"),
         Node(
             package="password_system",
             executable="password_node",
@@ -22,7 +21,6 @@ def generate_launch_description():
             parameters=[config, {
                 "input_mode": LaunchConfiguration("input_mode"),
                 "engine": LaunchConfiguration("engine"),
-                "language": LaunchConfiguration("language"),
             }],
         ),
     ])
