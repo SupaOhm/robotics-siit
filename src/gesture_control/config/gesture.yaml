@@ -1,0 +1,29 @@
+gesture_node:
+  ros__parameters:
+    # input_mode (camera | keyboard), camera_index, model_path and show_window
+    # are launch arguments:
+    #   ros2 launch gesture_control gesture.launch.py show_window:=true
+    # Keyboard mode needs a terminal, so use ros2 run:
+    #   ros2 run gesture_control gesture_node --ros-args -p input_mode:=keyboard
+    #
+    # All thresholds are untuned starting values.
+
+    publish_rate: 10.0         # Hz, fixed; every tick repeats the current word (D4)
+    stale_s: 0.3               # no frame result this long -> publish none (< 0.5)
+
+    # Classifier (lengths in units of frame height, angles in degrees)
+    extend_ratio: 1.1          # finger extended if tip-wrist > pip-wrist * ratio
+    fist_max_fingers: 1        # extended fingers (thumb ignored) <= this -> stop
+    deadzone_radius: 0.12      # open hand this close to the centre -> none
+    deadzone_hysteresis: 0.02
+    forward_half_angle: 30.0   # |angle| <= this -> forward (0 = above centre)
+    back_min_angle: 150.0      # |angle| >= this -> back
+    angle_hysteresis: 8.0
+
+    # Smoother
+    confirm_frames: 3          # frames in a row before a new word takes over
+    back_confirm_frames: 6     # back is the operator override (D11): guard it
+    dropout_hold_s: 0.3        # hand lost: keep the word this long, then none (< 0.5)
+
+    # Keyboard mode
+    key_hold_s: 0.8            # word lasts this long after the last key; 0 = latch

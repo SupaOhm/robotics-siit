@@ -24,3 +24,5 @@ Thumbs.db
 *.pt
 *.onnx
 *_ncnn_model/
+*.task
+.venv-gesture/
