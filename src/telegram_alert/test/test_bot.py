@@ -122,12 +122,40 @@ def test_photo_failure_falls_back_to_text():
     assert kinds(fake)[1] == "edit_message_text"
 
 
-def test_timed_out_send_is_not_retried_or_duplicated():
-    bot, fake, _, warnings = make()
+def test_photo_timeout_still_sends_the_alert_as_text():
+    # ohm's review on #6: a slow upload on the hotspot must not lose the alert
+    bot, fake, decisions, warnings = make()
     fake.fail["send_photo"] = TimedOut()
     asyncio.run(bot.alert("a1", b"jpeg"))
-    assert kinds(fake) == []  # no second photo, no text copy
+    assert kinds(fake) == ["send_message"]  # the photo is not retried
+    assert "photo upload timed out" in fake.calls[0][1]["text"]
     assert any("timed out" in w for w in warnings)
+    # The photo may still have arrived with the same buttons: the first press
+    # on either copy counts, and the second gets "no longer active".
+    data = buttons(fake.calls[0])[0]
+
+    async def go():
+        await bot.on_button(press(data)[0], None)
+        update, answers = press(data)
+        await bot.on_button(update, None)
+        return answers
+
+    assert "no longer active" in asyncio.run(go())[0]
+    assert decisions == [{"id": "a1", "decision": "allow"}]
+
+
+def test_photo_upload_time_is_capped():
+    bot, fake, _, _ = make()
+    asyncio.run(bot.alert("a1", b"jpeg"))
+    assert fake.calls[0][1]["write_timeout"] == 8.0
+
+
+def test_timed_out_text_send_is_not_retried():
+    bot, fake, _, warnings = make()
+    fake.fail["send_message"] = TimedOut()
+    asyncio.run(bot.alert("a1", None))
+    assert kinds(fake) == []  # no duplicate text card
+    assert any("may have arrived" in w for w in warnings)
 
 
 def test_close_waits_for_a_send_in_flight():

@@ -13,6 +13,10 @@ from .alert_book import AlertBook, Card, Close
 
 TRIES = 3
 TIMED_OUT = object()  # _call result: a send timed out and may have been delivered
+# Upload limit for the photo (the library's default is 20 s). A camera JPEG is
+# ~50 KB; if it times out, the text fallback still reaches the operator early
+# in the 30 s window.
+PHOTO_WRITE_TIMEOUT = 8.0
 
 
 def _seconds(retry_after) -> float:
@@ -136,12 +140,17 @@ class AlertBot:
         if jpeg is not None:
             card.with_photo = True
             msg = await self._call("send photo", lambda: self.bot.send_photo(
-                chat_id=chat, photo=jpeg, caption=card.text, reply_markup=markup),
-                retry_timeouts=False)
-            if msg is None:  # failed for sure: the alert still goes out, as text
-                self.warn("alert %s: photo failed, sending text only" % card.alert_id)
+                chat_id=chat, photo=jpeg, caption=card.text, reply_markup=markup,
+                write_timeout=PHOTO_WRITE_TIMEOUT), retry_timeouts=False)
+            if msg is None or msg is TIMED_OUT:
+                # The alert must reach the operator, so send it as text. After a
+                # timeout the photo may still arrive: both copies carry the same
+                # token, so whichever is pressed first counts, and the other
+                # answers "no longer active".
+                why = "upload timed out" if msg is TIMED_OUT else "failed to send"
+                self.warn("alert %s: photo %s, sending text" % (card.alert_id, why))
                 card.with_photo = False
-                card.text += "\n(photo failed to send)"
+                card.text += "\n(photo %s)" % why
         if not card.with_photo:
             msg = await self._call("send message", lambda: self.bot.send_message(
                 chat_id=chat, text=card.text, reply_markup=markup),

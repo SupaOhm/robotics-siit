@@ -33,8 +33,9 @@ def parse_env_file(text: str) -> Dict[str, str]:
             line = line[len("export "):]
         key, _, value = line.partition("=")
         value = value.strip()
-        if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
-            value = value[1:-1]
+        close = value.find(value[0], 1) if value[:1] in ("'", '"') else -1
+        if close > 0:  # quoted: keep what's inside, drop anything after
+            value = value[1:close]
         else:
             value = value.split(" #", 1)[0].strip()
         values[key.strip()] = value

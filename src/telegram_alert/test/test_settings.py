@@ -50,10 +50,15 @@ def test_bad_numbers_fail():
         load_settings({"TELEGRAM_BOT_TOKEN": "t", "TELEGRAM_CHAT_ID": "abc"})
 
 
-def test_inline_comment_after_unquoted_value():
-    text = 'TELEGRAM_CHAT_ID=-100123  # operator group\nTELEGRAM_BOT_TOKEN="a #b"\n'
+def test_inline_comments():
+    text = ('TELEGRAM_CHAT_ID=-100123  # operator group\n'
+            'TELEGRAM_BOT_TOKEN="a #b"\n'
+            'TELEGRAM_ALLOWED_USERS="11,22" # pun and fah\n'
+            "OTHER='x' # note\n")
     assert parse_env_file(text) == {"TELEGRAM_CHAT_ID": "-100123",
-                                    "TELEGRAM_BOT_TOKEN": "a #b"}
+                                    "TELEGRAM_BOT_TOKEN": "a #b",
+                                    "TELEGRAM_ALLOWED_USERS": "11,22",
+                                    "OTHER": "x"}
 
 
 def test_token_not_in_repr():

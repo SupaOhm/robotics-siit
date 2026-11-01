@@ -57,14 +57,17 @@ Rules:
   `TELEGRAM_ALLOWED_USERS` set, only those users can press them.
 - **No camera frame?** The alert is still sent as text with "(no camera
   image)". A frame older than `max_image_age` gets "(camera image N s old)".
-  If the photo upload fails, the alert is sent as text instead.
+  If the photo upload fails or takes more than 8 s, the alert is sent as
+  text instead, so it reaches the operator early in the 30 s. If a slow
+  photo still arrives, it has the same buttons: the first press on either
+  copy counts, and the other answers "This alert is no longer active".
 - **No internet at start-up** (hotspot not up yet): the node keeps trying,
   every 2 s up to every 60 s, and queues alerts until it connects. A wrong
   token stops the node with an error.
 - **Network trouble** is retried 3 times. A send that times out is not
-  retried, because it may have arrived; a duplicate would keep live
-  buttons. Button presses made while the node was stopped are dropped when
-  it restarts.
+  sent again the same way, because it may have arrived (a timed-out photo
+  falls back to text, as above). Button presses made while the node was
+  stopped are dropped when it restarts.
 
 ## Set up the bot (once, about 5 minutes)
 
