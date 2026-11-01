@@ -3,15 +3,22 @@
 Decides which Telegram messages ("cards") to send, which to close, and what a
 button press means. ``bot.py`` does the actual Telegram calls.
 
-Contract (docs/interfaces.md v0.3, D11, D14, D15):
+Contract (docs/interfaces.md v0.3, D11, D14, D15, D30):
 - /telegram/alert <id>     -> card with a photo and Allow / Deny buttons
 - /telegram/blocking <id>  -> card "Robot is blocking" with a Resume button.
   It also closes any Allow / Deny card nobody answered: the 30 s timeout
   lives in the state machine, which treats it as Deny.
 - a button press           -> {"id": ..., "decision": "allow"|"deny"|"resume"}
   on /telegram/decision, and the card's buttons are removed.
+- /robot/state leaving WAIT_OPERATOR or BLOCKING (e.g. the operator held
+  `back`) closes the cards that state was waiting on.
+
+Every card's buttons carry a token that is unique to this run, so a button
+on an old card can never act on a newer alert, even if alert ids repeat
+after the state machine restarts.
 """
 
+import secrets
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Iterable, List, Optional, Tuple
@@ -23,32 +30,40 @@ BUTTON_LABELS = {ALLOW: "✅ Allow", DENY: "⛔ Deny", RESUME: "▶️ Resume"}
 RESULT_LINES = {ALLOW: "✅ Allowed by %s", DENY: "⛔ Denied by %s",
                 RESUME: "▶️ Resumed by %s"}
 
-EXPIRED_LINE = "⌛ No answer in 30 s: treated as Deny"
+# State machine states (docs/interfaces.md) whose cards are waiting for a press
+STATE_FOR_KIND = {ALERT: "WAIT_OPERATOR", BLOCKING: "BLOCKING"}
+
+EXPIRED_LINE = "⌛ No answer in %d s: treated as Deny"
 SUPERSEDED_LINE = "Closed: a newer alert replaced this one"
+MOVED_ON_LINE = "Closed: the robot moved on (now %s)"
 
 MAX_CALLBACK_BYTES = 64  # Telegram limit for callback_data
 MAX_CARDS = 50
 
 
-def callback_data(decision: str, alert_id: str) -> str:
-    data = "%s:%s" % (decision, alert_id)
+def callback_data(decision: str, alert_id: str, token: str) -> str:
+    data = "%s:%s:%s" % (decision, token, alert_id)
     if len(data.encode("utf-8")) > MAX_CALLBACK_BYTES:
         raise ValueError("alert id too long for a Telegram button: %r" % alert_id)
     return data
 
 
-def parse_callback(data: str) -> Optional[Tuple[str, str]]:
-    """'allow:a3' -> ('allow', 'a3'); None if it isn't one of our buttons."""
-    decision, sep, alert_id = (data or "").partition(":")
-    if not sep or not alert_id or decision not in BUTTON_LABELS:
+def parse_callback(data: str) -> Optional[Tuple[str, str, str]]:
+    """'allow:k1:a3' -> ('allow', 'a3', 'k1'); None if it isn't one of our buttons."""
+    parts = (data or "").split(":", 2)
+    if len(parts) != 3 or parts[0] not in BUTTON_LABELS or not parts[1] or not parts[2]:
         return None
-    return decision, alert_id
+    decision, token, alert_id = parts
+    return decision, alert_id, token
 
 
-def alert_text(alert_id: str, clock: str) -> str:
-    return ("🚨 Checkpoint: wrong password 3 times.\n"
+def alert_text(alert_id: str, clock: str, timeout_s: int) -> str:
+    # Not "wrong password 3 times": WAIT_OPERATOR also follows a password
+    # check with no result in 60 s (D30).
+    return ("🚨 Checkpoint: this person did not pass the password check.\n"
             "Alert %s at %s\n"
-            "Allow this person to pass? No answer in 30 s = Deny." % (alert_id, clock))
+            "Allow this person to pass? No answer in %d s = Deny."
+            % (alert_id, clock, timeout_s))
 
 
 def blocking_text(alert_id: str, clock: str) -> str:
@@ -62,6 +77,7 @@ class Card:
     """One Telegram message with buttons."""
     alert_id: str
     kind: str                       # ALERT | BLOCKING
+    token: str
     text: str
     buttons: List[Tuple[str, str]]  # (label, callback_data)
     with_photo: bool = False
@@ -86,41 +102,64 @@ class PressResult:
 @dataclass
 class AlertBook:
     allowed_users: Iterable[int] = ()
-    cards: "OrderedDict[str, Card]" = field(default_factory=OrderedDict)
+    timeout_s: int = 30  # the state machine's WAIT_OPERATOR timeout, for the text only
+    cards: "OrderedDict[str, Card]" = field(default_factory=OrderedDict)  # by token
 
     def __post_init__(self):
         self.allowed_users = frozenset(int(u) for u in self.allowed_users)
+        self._run = secrets.token_hex(2)  # differs after a node restart
+        self._serial = 0
 
     def _new_card(self, alert_id: str, kind: str, text: str) -> Card:
-        buttons = [(BUTTON_LABELS[d], callback_data(d, alert_id))
+        self._serial += 1
+        token = "%s%d" % (self._run, self._serial)
+        buttons = [(BUTTON_LABELS[d], callback_data(d, alert_id, token))
                    for d in DECISIONS_FOR_KIND[kind]]
-        card = Card(alert_id, kind, text, buttons)
-        self.cards[alert_id] = card
+        card = Card(alert_id, kind, token, text, buttons)
+        self.cards[token] = card
         while len(self.cards) > MAX_CARDS:
             self.cards.popitem(last=False)
         return card
 
-    def _close_open(self, line_for_kind) -> List[Close]:
+    def _is_open_duplicate(self, alert_id: str, kind: str) -> bool:
+        return any(c.open and c.alert_id == alert_id and c.kind == kind
+                   for c in self.cards.values())
+
+    def _close_open(self, line_for_kind, kinds=(ALERT, BLOCKING)) -> List[Close]:
         closes = []
         for card in self.cards.values():
-            if card.open:
+            if card.open and card.kind in kinds:
                 card.open = False
                 closes.append(Close(card, card.text + "\n\n" + line_for_kind[card.kind]))
         return closes
 
     def new_alert(self, alert_id: str, clock: str) -> Tuple[List[Close], Optional[Card]]:
-        """State machine sent /telegram/alert. Repeated ids are ignored."""
-        if alert_id in self.cards:
+        """State machine sent /telegram/alert. An id that is still open is a
+        duplicate and ignored; a reused id (state machine restarted) is new."""
+        if self._is_open_duplicate(alert_id, ALERT):
             return [], None
         closes = self._close_open({ALERT: SUPERSEDED_LINE, BLOCKING: SUPERSEDED_LINE})
-        return closes, self._new_card(alert_id, ALERT, alert_text(alert_id, clock))
+        text = alert_text(alert_id, clock, self.timeout_s)
+        return closes, self._new_card(alert_id, ALERT, text)
 
     def new_blocking(self, alert_id: str, clock: str) -> Tuple[List[Close], Optional[Card]]:
         """State machine sent /telegram/blocking (after Deny or the 30 s timeout)."""
-        if alert_id in self.cards:
+        if self._is_open_duplicate(alert_id, BLOCKING):
             return [], None
-        closes = self._close_open({ALERT: EXPIRED_LINE, BLOCKING: SUPERSEDED_LINE})
+        expired = EXPIRED_LINE % self.timeout_s
+        closes = self._close_open({ALERT: expired, BLOCKING: SUPERSEDED_LINE})
         return closes, self._new_card(alert_id, BLOCKING, blocking_text(alert_id, clock))
+
+    def state_changed(self, old: str, new: str) -> List[Close]:
+        """/robot/state went from ``old`` to ``new``. Leaving WAIT_OPERATOR or
+        BLOCKING closes that state's open cards, so a stale button can't look
+        live. WAIT_OPERATOR -> BLOCKING is left to /telegram/blocking, which
+        marks the alert as expired."""
+        line = MOVED_ON_LINE % new
+        kinds = [kind for kind, state in STATE_FOR_KIND.items()
+                 if old == state and new != state
+                 and not (kind == ALERT and new == STATE_FOR_KIND[BLOCKING])]
+        return self._close_open({ALERT: line, BLOCKING: line}, kinds)
 
     def press(self, data: str, user_id: int, user_name: str) -> PressResult:
         """Someone pressed a button in the chat."""
@@ -129,9 +168,9 @@ class AlertBook:
             return PressResult("Unknown button")
         if self.allowed_users and int(user_id) not in self.allowed_users:
             return PressResult("You are not allowed to answer alerts")
-        decision, alert_id = parsed
-        card = self.cards.get(alert_id)
-        if card is None or not card.open:
+        decision, alert_id, token = parsed
+        card = self.cards.get(token)
+        if card is None or not card.open or card.alert_id != alert_id:
             return PressResult("This alert is no longer active")
         if decision not in DECISIONS_FOR_KIND[card.kind]:
             return PressResult("Unknown button")

@@ -1,9 +1,9 @@
 telegram_node:
   ros__parameters:
     # The bot token and chat id are NOT stored here. Set TELEGRAM_BOT_TOKEN
-    # and TELEGRAM_CHAT_ID in the environment, or point env_file at the
-    # gitignored .env file. See the README.
-    env_file: ""
-    image_topic: "/camera/image_raw"   # real name confirmed at robot bring-up
+    # and TELEGRAM_CHAT_ID in the environment, or pass the gitignored .env:
+    #   ros2 launch telegram_alert telegram.launch.py env_file:=$HOME/robotics-siit/.env
+    image_topic: "/camera/image_raw"   # real name confirmed at robot bring-up; set it here
     jpeg_quality: 85
     max_image_age: 2.0                 # seconds; older frames get a note in the caption
+    operator_timeout: 30               # match the state machine's WAIT_OPERATOR timeout

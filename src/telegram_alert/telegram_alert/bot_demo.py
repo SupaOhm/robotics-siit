@@ -36,7 +36,7 @@ async def run(args) -> None:
         print("/telegram/decision:", json.dumps(decision))
         decisions.put_nowait(decision)
 
-    bot = AlertBot(settings, on_decision)
+    bot = AlertBot(settings, on_decision, timeout_s=int(args.timeout))
     await bot.start()
     try:
         print("Sending alert demo1, answer in Telegram within %.0f s..." % args.timeout)

@@ -48,3 +48,14 @@ def test_missing_values_fail(environ):
 def test_bad_numbers_fail():
     with pytest.raises(RuntimeError):
         load_settings({"TELEGRAM_BOT_TOKEN": "t", "TELEGRAM_CHAT_ID": "abc"})
+
+
+def test_inline_comment_after_unquoted_value():
+    text = 'TELEGRAM_CHAT_ID=-100123  # operator group\nTELEGRAM_BOT_TOKEN="a #b"\n'
+    assert parse_env_file(text) == {"TELEGRAM_CHAT_ID": "-100123",
+                                    "TELEGRAM_BOT_TOKEN": "a #b"}
+
+
+def test_token_not_in_repr():
+    s = load_settings({"TELEGRAM_BOT_TOKEN": "secret123", "TELEGRAM_CHAT_ID": "1"})
+    assert "secret123" not in repr(s)

@@ -10,19 +10,20 @@ They can also live in a gitignored .env file (KEY=VALUE lines) passed as
 """
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, FrozenSet, Mapping, Optional
 
 
 @dataclass(frozen=True)
 class Settings:
-    token: str
+    token: str = field(repr=False)  # keep it out of logs and tracebacks
     chat_id: int
     allowed_users: FrozenSet[int]
 
 
 def parse_env_file(text: str) -> Dict[str, str]:
-    """KEY=VALUE lines; '#' comments, blank lines, 'export ' and quotes allowed."""
+    """KEY=VALUE lines; '#' comments (also after an unquoted value), blank
+    lines, 'export ' and quotes allowed."""
     values = {}
     for line in text.splitlines():
         line = line.strip()
@@ -34,6 +35,8 @@ def parse_env_file(text: str) -> Dict[str, str]:
         value = value.strip()
         if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
             value = value[1:-1]
+        else:
+            value = value.split(" #", 1)[0].strip()
         values[key.strip()] = value
     return values
 

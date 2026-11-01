@@ -12,6 +12,7 @@ from typing import Callable, Iterable, Optional
 from .alert_book import AlertBook, Card, Close
 
 TRIES = 3
+TIMED_OUT = object()  # _call result: a send timed out and may have been delivered
 
 
 def _seconds(retry_after) -> float:
@@ -27,19 +28,27 @@ def _clock() -> str:
 
 class AlertBot:
     def __init__(self, settings, on_decision: Callable[[dict], None],
-                 log: Callable[[str], None] = print, bot=None):
+                 log: Callable[[str], None] = print,
+                 warn: Optional[Callable[[str], None]] = None,
+                 bot=None, timeout_s: int = 30):
         self.settings = settings
-        self.book = AlertBook(settings.allowed_users)
+        self.book = AlertBook(settings.allowed_users, timeout_s)
         self.on_decision = on_decision
         self.log = log
+        self.warn = warn or log
         self.app = None
         self._bot = bot  # tests pass a fake; otherwise the Application's bot
+        # One Telegram operation at a time, so a card is never closed while
+        # its send is still in flight (it would keep live-looking buttons).
+        self._lock = asyncio.Lock()
 
     @property
     def bot(self):
         return self._bot if self._bot is not None else self.app.bot
 
     async def start(self) -> None:
+        """Connect and start polling. Raises if Telegram can't be reached;
+        call stop() before trying again."""
         from telegram.ext import Application, CallbackQueryHandler, CommandHandler
         self.app = Application.builder().token(self.settings.token).build()
         self.app.add_handler(CallbackQueryHandler(self.on_button))
@@ -64,24 +73,30 @@ class AlertBot:
 
     async def alert(self, alert_id: str, jpeg: Optional[bytes] = None, note: str = "") -> None:
         """Photo of the person with Allow / Deny buttons."""
-        closes, card = self.book.new_alert(alert_id, _clock())
-        await self._close(closes)
-        if card is None:
-            self.log("alert %s already sent, ignored" % alert_id)
-            return
-        if note:
-            card.text += "\n" + note
-        card.with_photo = jpeg is not None
-        await self._show(card, jpeg)
+        async with self._lock:
+            closes, card = self.book.new_alert(alert_id, _clock())
+            await self._close(closes)
+            if card is None:
+                self.log("alert %s already open, ignored" % alert_id)
+                return
+            if note:
+                card.text += "\n" + note
+            await self._show(card, jpeg)
 
     async def blocking(self, alert_id: str) -> None:
         """Deny or timeout happened: expire Allow / Deny, offer Resume."""
-        closes, card = self.book.new_blocking(alert_id, _clock())
-        await self._close(closes)
-        if card is None:
-            self.log("blocking %s already sent, ignored" % alert_id)
-            return
-        await self._show(card, None)
+        async with self._lock:
+            closes, card = self.book.new_blocking(alert_id, _clock())
+            await self._close(closes)
+            if card is None:
+                self.log("blocking %s already open, ignored" % alert_id)
+                return
+            await self._show(card, None)
+
+    async def robot_state(self, old: str, new: str) -> None:
+        """/robot/state changed: close cards the robot is no longer waiting on."""
+        async with self._lock:
+            await self._close(self.book.state_changed(old, new))
 
     # ----- Telegram -> state machine -------------------------------------
 
@@ -99,7 +114,8 @@ class AlertBot:
             self.log("decision %s" % result.decision)
         await self._call("answer", lambda: query.answer(result.toast))
         if result.close is not None:
-            await self._close([result.close])
+            async with self._lock:
+                await self._close([result.close])
 
     async def on_start_command(self, update, context) -> None:
         chat = update.effective_chat
@@ -116,13 +132,24 @@ class AlertBot:
 
     async def _show(self, card: Card, jpeg: Optional[bytes]) -> None:
         chat, markup = self.settings.chat_id, self._markup(card)
-        if card.with_photo:
+        msg = None
+        if jpeg is not None:
+            card.with_photo = True
             msg = await self._call("send photo", lambda: self.bot.send_photo(
-                chat_id=chat, photo=jpeg, caption=card.text, reply_markup=markup))
-        else:
+                chat_id=chat, photo=jpeg, caption=card.text, reply_markup=markup),
+                retry_timeouts=False)
+            if msg is None:  # failed for sure: the alert still goes out, as text
+                self.warn("alert %s: photo failed, sending text only" % card.alert_id)
+                card.with_photo = False
+                card.text += "\n(photo failed to send)"
+        if not card.with_photo:
             msg = await self._call("send message", lambda: self.bot.send_message(
-                chat_id=chat, text=card.text, reply_markup=markup))
-        if msg is not None:
+                chat_id=chat, text=card.text, reply_markup=markup),
+                retry_timeouts=False)
+        if msg is TIMED_OUT:
+            self.warn("%s %s: send timed out; it may have arrived, but its buttons "
+                      "can't be removed later" % (card.kind, card.alert_id))
+        elif msg is not None:
             card.message_id = msg.message_id
 
     async def _close(self, closes: Iterable[Close]) -> None:
@@ -139,22 +166,30 @@ class AlertBot:
                 await self._call("edit message", lambda: self.bot.edit_message_text(
                     text=close.text, chat_id=chat, message_id=card.message_id))
 
-    async def _call(self, what: str, make_request):
-        """Run a Telegram request, retrying network trouble. None on failure."""
-        from telegram.error import BadRequest, NetworkError, RetryAfter, TelegramError
+    async def _call(self, what: str, make_request, retry_timeouts: bool = True):
+        """Run a Telegram request, retrying network trouble. None on failure.
+        With retry_timeouts=False (sends), a timeout returns TIMED_OUT instead
+        of retrying, because the first send may have been delivered."""
+        from telegram.error import (BadRequest, NetworkError, RetryAfter, TelegramError,
+                                    TimedOut)
         for attempt in range(TRIES):
             try:
                 return await make_request()
             except RetryAfter as e:
                 await asyncio.sleep(_seconds(e.retry_after))
             except BadRequest as e:  # a subclass of NetworkError, but retrying won't help
-                self.log("%s failed: %s" % (what, e))
+                self.warn("%s failed: %s" % (what, e))
                 return None
+            except TimedOut as e:  # also a NetworkError subclass
+                if not retry_timeouts:
+                    return TIMED_OUT
+                self.warn("%s: timed out (%s), try %d/%d" % (what, e, attempt + 1, TRIES))
+                await asyncio.sleep(1 + attempt)
             except NetworkError as e:
-                self.log("%s: network error (%s), try %d/%d" % (what, e, attempt + 1, TRIES))
+                self.warn("%s: network error (%s), try %d/%d" % (what, e, attempt + 1, TRIES))
                 await asyncio.sleep(1 + attempt)
             except TelegramError as e:
-                self.log("%s failed: %s" % (what, e))
+                self.warn("%s failed: %s" % (what, e))
                 return None
-        self.log("%s failed after %d tries" % (what, TRIES))
+        self.warn("%s failed after %d tries" % (what, TRIES))
         return None
