@@ -55,9 +55,6 @@ class Event:
     type: EventType
     attempts_left: int
 
-    def to_dict(self) -> dict:
-        return {"type": self.type.value, "attempts_left": self.attempts_left}
-
 
 def outputs_for(events) -> Tuple[List[str], List[str]]:
     """(results, clips) to publish for one batch of events. The last failure
@@ -79,6 +76,23 @@ def make_salt() -> str:
     return secrets.token_hex(8)
 
 
+def make_stored(normalized: str, salt: str = "") -> str:
+    """The single ROBOT_PASSWORD_HASH value: "<length>:<salt>:<sha256 hex>".
+    Length, salt and hash travel together, so they can't get out of step."""
+    salt = salt or make_salt()
+    return "%d:%s:%s" % (len(normalized), salt, hash_password(normalized, salt))
+
+
+def parse_stored(value: str) -> Tuple[str, str, int]:
+    """(hash, salt, length) from a make_stored() value. ValueError if malformed."""
+    parts = value.strip().split(":")
+    if (len(parts) != 3 or not parts[0].isdigit() or int(parts[0]) < 1
+            or not parts[1] or len(parts[2]) != 64):
+        raise ValueError("ROBOT_PASSWORD_HASH must look like <length>:<salt>:<64 hex "
+                         "chars>; print a new one with make_password_hash")
+    return parts[2], parts[1], int(parts[0])
+
+
 class PasswordVerifier:
     def __init__(
         self,
@@ -86,7 +100,7 @@ class PasswordVerifier:
         salt: str,
         password_chars: int,
         max_attempts: int = 3,
-        match_mode: str = "contains",
+        match_mode: str = "exact",
         max_service_errors: int = 3,
     ):
         if password_chars < 1:
@@ -95,6 +109,8 @@ class PasswordVerifier:
             raise ValueError("max_attempts must be >= 1")
         if match_mode not in MATCH_MODES:
             raise ValueError("match_mode must be one of %s" % (MATCH_MODES,))
+        if max_service_errors < 1:
+            raise ValueError("max_service_errors must be >= 1")
         self._hash = password_hash.lower()
         self._salt = salt
         self.password_chars = password_chars
@@ -165,6 +181,15 @@ class PasswordVerifier:
             return []
         self._service_errors = 0
         return self._fail_attempt(EventType.NO_SPEECH)
+
+    def handle(self, result) -> List[Event]:
+        """Events for one listen result (speech.ListenResult: kind is
+        "speech", "no_speech" or "error")."""
+        if result.kind == "no_speech":
+            return self.no_speech()
+        if result.kind == "error":
+            return self.service_error()
+        return self.submit(result.candidates)
 
     def service_error(self) -> List[Event]:
         if not self.active:

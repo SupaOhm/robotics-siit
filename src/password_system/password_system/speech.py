@@ -12,6 +12,7 @@ tested without them.
 """
 
 import json
+import os
 from dataclasses import dataclass, field
 from typing import List, Optional
 
@@ -60,7 +61,7 @@ class SpeechListener:
         listen_timeout: float = 6.0,
         phrase_time_limit: float = 5.0,
         vosk_model_path: str = "",
-        calibrate_seconds: float = 1.0,
+        operation_timeout: float = 10.0,
     ):
         if engine not in ENGINES:
             raise ValueError("engine must be one of %s" % (ENGINES,))
@@ -73,29 +74,33 @@ class SpeechListener:
         self.phrase_time_limit = phrase_time_limit
         self.recognizer = sr.Recognizer()
         self.recognizer.dynamic_energy_threshold = True
+        # Google only: give up on a dropped connection instead of hanging
+        self.recognizer.operation_timeout = operation_timeout
 
         self._vosk_model = None
         if engine == "vosk":
+            # No download at startup: the venue may have no internet.
+            if not vosk_model_path or not os.path.isdir(vosk_model_path):
+                raise ValueError(
+                    "vosk_model_path must point to an unzipped Vosk model folder "
+                    "(got %r). Download vosk-model-small-en-us-0.15 once, see the "
+                    "README." % vosk_model_path)
             from vosk import Model, SetLogLevel
             SetLogLevel(-1)
-            if vosk_model_path:
-                self._vosk_model = Model(vosk_model_path)
-            else:  # downloads the small model for the language on first use
-                self._vosk_model = Model(lang=language.lower())
-
-        if calibrate_seconds > 0:
-            self.calibrate(calibrate_seconds)
+            self._vosk_model = Model(vosk_model_path)
 
     def _microphone(self):
         return self._sr.Microphone(device_index=self.device_index)
 
-    def calibrate(self, seconds: float) -> None:
-        """Measure background noise to set the speech energy threshold."""
+    def calibrate(self, seconds: float = 1.0) -> None:
+        """Measure background noise to set the speech energy threshold.
+        Raises if the microphone can't be opened."""
         with self._microphone() as source:
             self.recognizer.adjust_for_ambient_noise(source, duration=seconds)
 
     def listen_once(self) -> ListenResult:
-        """Block until one phrase is heard (or timeout), then transcribe it."""
+        """Block until one phrase is heard (or timeout), then transcribe it.
+        Never raises: any failure comes back as kind "error"."""
         sr = self._sr
         try:
             with self._microphone() as source:
@@ -104,15 +109,15 @@ class SpeechListener:
                     phrase_time_limit=self.phrase_time_limit)
         except sr.WaitTimeoutError:
             return ListenResult("no_speech")
-        except OSError as e:  # microphone missing or busy
-            return ListenResult("error", error="microphone: %s" % e)
+        except Exception as e:  # mic missing or busy (OSError, AttributeError, ...)
+            return ListenResult("error", error="microphone: %r" % e)
 
         try:
             return ListenResult("speech", self.transcribe(audio))
         except sr.UnknownValueError:
             return ListenResult("speech", [])
-        except sr.RequestError as e:
-            return ListenResult("error", error="speech service: %s" % e)
+        except Exception as e:  # RequestError, no flac binary, ...
+            return ListenResult("error", error="speech engine: %r" % e)
 
     def transcribe(self, audio) -> List[str]:
         if self.engine == "google":

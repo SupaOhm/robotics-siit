@@ -44,3 +44,14 @@ def test_vosk_grammar_is_digit_words():
     assert "[unk]" in words
     assert {"zero", "one", "two", "three", "four", "five", "six", "seven",
             "eight", "nine"} <= set(words)
+
+
+def test_vosk_needs_a_model_folder(tmp_path):
+    # no download at startup: the venue may have no internet (guy's review, #5)
+    import pytest
+    pytest.importorskip("speech_recognition")
+    from password_system.speech import SpeechListener
+    with pytest.raises(ValueError, match="vosk_model_path"):
+        SpeechListener(engine="vosk", vosk_model_path="")
+    with pytest.raises(ValueError, match="vosk_model_path"):
+        SpeechListener(engine="vosk", vosk_model_path=str(tmp_path / "missing"))

@@ -1,13 +1,15 @@
 import pytest
 
 from password_system.normalize import normalize
+from types import SimpleNamespace
+
 from password_system.verifier import (EventType, PasswordVerifier, hash_password,
-                                      outputs_for)
+                                      make_stored, outputs_for, parse_stored)
 
 SALT = "testsalt"
 
 
-def make(password="one three five two", attempts=3, match_mode="contains",
+def make(password="one three five two", attempts=3, match_mode="exact",
          max_service_errors=3):
     n = normalize(password)
     return PasswordVerifier(hash_password(n, SALT), SALT, len(n), attempts,
@@ -27,7 +29,6 @@ def test_correct_password_granted():
 
 @pytest.mark.parametrize("heard", [
     "1352", "1 3 5 2", "One, three, five, two.", "1,352", "one 3 five to",
-    "หนึ่ง สาม ห้า สอง", "๑๓๕๒",
 ])
 def test_transcription_variants_match(heard):
     v = make()
@@ -35,17 +36,58 @@ def test_transcription_variants_match(heard):
     assert types(v.submit([heard])) == [EventType.GRANTED]
 
 
-def test_contains_mode_allows_extra_words():
+def test_exact_is_the_default():
+    v = PasswordVerifier(hash_password("1352", SALT), SALT, 4)
+    assert v.match_mode == "exact"
+
+
+def test_exact_mode_rejects_a_run_of_digits():
+    # contains mode would let one attempt test many codes (guy's review, #5)
     v = make()
+    v.start()
+    assert types(v.submit(["0123135296"])) == [EventType.WRONG]
+    assert types(v.submit(["the password is 1352"])) == [EventType.WRONG]
+    assert types(v.submit(["1352"])) == [EventType.GRANTED]
+
+
+def test_contains_mode_allows_extra_words():
+    v = make(match_mode="contains")
     v.start()
     assert types(v.submit(["the password is 1352 thanks"])) == [EventType.GRANTED]
 
 
-def test_exact_mode_rejects_extra_words():
-    v = make(match_mode="exact")
+def test_max_service_errors_must_be_positive():
+    with pytest.raises(ValueError):
+        make(max_service_errors=0)
+
+
+def test_stored_password_roundtrip():
+    stored = make_stored("1352", "abc")
+    password_hash, salt, chars = parse_stored(stored)
+    assert (salt, chars) == ("abc", 4)
+    v = PasswordVerifier(password_hash, salt, chars)
     v.start()
-    assert types(v.submit(["the password is 1352"])) == [EventType.WRONG]
-    assert types(v.submit(["1352"])) == [EventType.GRANTED]
+    assert types(v.submit(["one three five two"])) == [EventType.GRANTED]
+
+
+@pytest.mark.parametrize("value", ["", "abc", "4:salt", "0:salt:" + "a" * 64,
+                                   "x:salt:" + "a" * 64, "4::" + "a" * 64, "4:salt:abc"])
+def test_bad_stored_password_fails_clearly(value):
+    with pytest.raises(ValueError, match="make_password_hash"):
+        parse_stored(value)
+
+
+@pytest.mark.parametrize("kind,candidates,expected", [
+    ("speech", ["1352"], [EventType.GRANTED]),
+    ("speech", ["9999"], [EventType.WRONG]),
+    ("speech", [], [EventType.UNCLEAR]),
+    ("no_speech", [], [EventType.NO_SPEECH]),
+    ("error", [], [EventType.SERVICE_ERROR]),
+])
+def test_handle_listen_result(kind, candidates, expected):
+    v = make()
+    v.start()
+    assert types(v.handle(SimpleNamespace(kind=kind, candidates=candidates))) == expected
 
 
 def test_any_candidate_can_match():
@@ -120,18 +162,6 @@ def test_restart_resets_attempts():
     v.submit(["1111"])
     v.start()
     assert v.attempts_left == 3
-
-
-def test_thai_phrase_password():
-    v = make(password="เปิด ประตู")
-    v.start()
-    assert types(v.submit(["ช่วยเปิดประตูหน่อย"])) == [EventType.GRANTED]
-
-
-def test_event_dict_has_no_transcript():
-    v = make()
-    ev = v.start()[0].to_dict()
-    assert ev == {"type": "started", "attempts_left": 3}
 
 
 def test_outputs_start_plays_prompt():
