@@ -82,7 +82,7 @@ do_setup() {
   if ! conda env list | awk '{print $1}' | grep -qx "$ENV_NAME"; then
     say "Creating env $ENV_NAME with ROS 2 Humble (this downloads ~1 GB, takes a while)"
     conda create -y -n "$ENV_NAME" -c conda-forge -c robostack-staging \
-      ros-humble-ros-base ros-humble-rmw-cyclonedds-cpp \
+      ros-humble-ros-base ros-humble-rmw-cyclonedds-cpp ros-humble-demo-nodes-cpp \
       colcon-common-extensions compilers cmake pkg-config make ninja
   else
     say "Env $ENV_NAME already exists"
@@ -91,6 +91,11 @@ do_setup() {
   conda config --env --add channels conda-forge
   conda config --env --add channels robostack-staging
   conda config --env --remove channels defaults >/dev/null 2>&1 || true
+  # demo_nodes_cpp: for the talker/listener link test in docs/robot-setup.md
+  if [ ! -d "$CONDA_PREFIX/share/demo_nodes_cpp" ]; then
+    say "Installing demo_nodes_cpp (talker/listener for the robot link test)"
+    conda install -y ros-humble-demo-nodes-cpp
+  fi
 
   # 3. team ROS settings, stored in the env so every activation gets them
   conda env config vars set ROS_DOMAIN_ID=42 RMW_IMPLEMENTATION=rmw_cyclonedds_cpp >/dev/null

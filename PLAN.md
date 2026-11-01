@@ -116,7 +116,7 @@ turns, are under "Still open" in [docs/interfaces.md](docs/interfaces.md).
 |---|---|
 | Is the chassis Ackermann? If so, do `AVOID` and the `left` / `right` gestures need to change? | Lane 1 (confirm), Lanes 2, 3 |
 | Is 0.30 m far enough for the camera to see a person? | ohm |
-| Which laptop runs `gesture_node`? It needs ROS 2 Humble | purin |
+| Which laptop runs `gesture_node`? Answer: purin's M1 MacBook, ROS 2 Humble from RoboStack (`tools/mac_ros_setup.sh`). Still to confirm: the link to the robot over the hotspot | purin |
 | What FPS counts as good enough for gesture control? | Lane 5 |
 | What demo conditions do we test in: lighting, background noise, hotspot? | Lane 5 |
 | Who can answer Telegram alerts: one private chat, or a group of operators? | Lane 4 |
