@@ -1,4 +1,3 @@
-
 import os
 import re
 import subprocess
@@ -36,13 +35,13 @@ class AudioPlayer:
     def request(self, clip_id):
         # Accept only safe clip IDs, not arbitrary file paths
         if not re.fullmatch(r"[a-z][a-z0-9_]*", clip_id):
-            print(f"[INVALID] {clip_id}")
+            print(f"[INVALID] {clip_id}", flush=True)
             return False
 
         path = self.clip_dir / f"{clip_id}.wav"
 
         if not path.is_file():
-            print(f"[MISSING] {clip_id}")
+            print(f"[MISSING] {clip_id}", flush=True)
             return False
 
         with self.condition:
@@ -56,7 +55,7 @@ class AudioPlayer:
                 last = self.last_found.get(clip_id, -float("inf"))
 
                 if now - last < self.cooldown:
-                    print(f"[COOLDOWN] {clip_id}")
+                    print(f"[COOLDOWN] {clip_id}", flush=True)
                     return False
 
                 self.last_found[clip_id] = now
@@ -68,7 +67,7 @@ class AudioPlayer:
             else:
                 self.queue.append(clip_id)
 
-            print(f"[QUEUED] {clip_id}")
+            print(f"[QUEUED] {clip_id}", flush=True)
             self.condition.notify()
             return True
 
@@ -122,7 +121,7 @@ class AudioPlayer:
                 self.interrupt.clear()
                 self.playing = True
 
-            print(f"[PLAY] {clip_id}")
+            print(f"[PLAY] {clip_id}", flush=True)
 
             try:
                 interrupted = self._play_file(
@@ -130,12 +129,12 @@ class AudioPlayer:
                 )
 
                 if interrupted:
-                    print(f"[INTERRUPTED] {clip_id}")
+                    print(f"[INTERRUPTED] {clip_id}", flush=True)
                 else:
-                    print(f"[DONE] {clip_id}")
+                    print(f"[DONE] {clip_id}", flush=True)
 
             except Exception as error:
-                print(f"[ERROR] {clip_id}: {error}")
+                print(f"[ERROR] {clip_id}: {error}", flush=True)
 
             finally:
                 with self.condition:

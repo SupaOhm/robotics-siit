@@ -25,6 +25,7 @@ Example: `found_chair`
 
 - found_chair
 - found_table
+- found_bottle
 - found_obstacle
 - password_prompt
 - password_wrong
