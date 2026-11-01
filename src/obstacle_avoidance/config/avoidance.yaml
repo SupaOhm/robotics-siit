@@ -21,9 +21,25 @@ avoidance_node:
     clear_distance: 0.40        # clear again at or above this (m)
     sensor_timeout: 0.5         # no reading this long -> blocked, turn fails (s)
 
-    # The state machine cancels AVOID after 10 s with no result, so keep
-    # max_turn_deg / turn_speed (in rad) + clear_time well under 10 s.
+    # How AVOID turns away (D6, D13). The state machine cancels AVOID after
+    # 10 s with no result, so keep a full turn well under that.
+    drive_type: "ackermann"     # ackermann: the A1, can't turn in place (backs up, then arcs)
+                                # diff: turns in place
+    imu_topic: "/imu/data_raw"  # gyro for the turned angle; "" = estimate it from the commands
+
+    # ackermann only
+    avoid_speed: 0.15           # m/s while backing and arcing
+    wheelbase: 0.16             # m, front to rear axle: measure on the A1
+    max_steer_deg: 30.0         # full lock: measure on the A1
+    back_turn_deg: 30.0         # each backing phase stops after this much turn,
+    max_reverse: 0.25           # or after this far back (m),
+    rear_clear: 0.20            # or when something is this close behind (m, LiDAR only)
+    arc_min_front: 0.20         # back up again if the front closes to this while arcing (m)
+    max_cycles: 3               # backing phases before "failed"
+
+    # diff only
     turn_speed: 1.0             # rad/s while turning in place
+
     min_turn_deg: 30.0
     max_turn_deg: 270.0         # turned this far with no clear front -> "failed"
     clear_time: 0.3             # front must stay clear this long (s)

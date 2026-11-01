@@ -22,11 +22,12 @@ it without ROS.
 | Topic | Type | Direction | Meaning |
 |---|---|---|---|
 | `/scan` or `/ultrasonic/range` | `LaserScan` / `Range` | in | Raw sensor (topic names are parameters) |
+| `/imu/data_raw` | `sensor_msgs/Imu` | in | Gyro z from the Yahboom base driver, to measure the turn (`imu_topic`, optional) |
 | `/obstacle/distance` | `std_msgs/Float32` | out | Filtered front distance in metres, one per reading |
 | `/obstacle/detected` | `std_msgs/Bool` | out | Sent at a fixed 10 Hz. `True` while blocked, from start-up until the first valid reading, and while the sensor is silent |
 | `/avoidance/start` | `std_msgs/Empty` | in | Turn away from the obstacle in front |
 | `/avoidance/cancel` | `std_msgs/Empty` | in | Stop turning |
-| `/avoidance/cmd_vel` | `geometry_msgs/Twist` | out | Turn command (`angular.z` only), sent only while turning |
+| `/avoidance/cmd_vel` | `geometry_msgs/Twist` | out | Turn command, sent only while turning. On the A1 (`ackermann`) `linear.x` is negative while it backs up and positive while it arcs forward; on a `diff` base it is 0 |
 | `/avoidance/result` | `std_msgs/String` | out | One per turn: `done`, `failed` or `cancelled` |
 
 Expected use by the main state machine:
@@ -38,8 +39,8 @@ named the object              -> publish /avoidance/start, forward /avoidance/cm
 /avoidance/result == "failed" -> boxed in or sensor lost: stop, ask the operator
 ```
 
-The node never drives forward and never writes `/cmd_vel` itself. Only the
-state machine writes `/cmd_vel`, and in `AVOID` it forwards
+The node only moves the robot during a turn and never writes `/cmd_vel`
+itself. Only the state machine writes `/cmd_vel`, and in `AVOID` it forwards
 `/avoidance/cmd_vel` (contract D2). For a bench test without the state
 machine, launch with `cmd_vel_topic:=/cmd_vel`.
 
@@ -56,16 +57,29 @@ machine, launch with `cmd_vel_topic:=/cmd_vel`.
 - **Threshold with hysteresis:** blocked at 0.30 m or closer, clear again
   only at 0.40 m or farther. A reading that hovers around 0.30 m does not
   toggle the state.
-- **Turn:** at 1 rad/s. It stops once it has turned at least 30 degrees and
-  the front has stayed clear (0.40 m) for 0.3 s. After 270 degrees with no
-  clear front it reports `failed`. Without odometry the node estimates the
-  angle as speed x time, so tune `turn_speed` on the real robot.
+- **Turn on the A1 (`drive_type: ackermann`, the default):** the A1 has
+  Ackermann steering and can't turn in place (Yahboom: "Ackerman chassis
+  turning requires forward velocity"). So it does a three-point turn:
+  1. Back up at 0.15 m/s on full lock, so the nose swings away. Stop after
+     30 degrees, 0.25 m, or when something is 0.20 m behind (LiDAR only).
+  2. Drive forward on full lock the same way round. Done once the corridor
+     ahead has stayed clear (0.40 m) for 0.3 s and the robot has turned at
+     least 30 degrees. If the front closes to 0.20 m, back up again.
+  3. After 3 backing phases, or 270 degrees, it reports `failed`.
+
+  The turned angle comes from the IMU gyro (`/imu/data_raw`), or from the
+  commands if there's no IMU. Measure `wheelbase` and `max_steer_deg` on
+  the A1. During a turn the node also reacts to the latest scan before the
+  filter: an arcing car sweeps side obstacles into its path, and in
+  CoppeliaSim the 0.3 s filter delay let the front close to 0.05 m.
+- **Turn on a `diff` base:** turns in place at 1 rad/s, with the same done
+  and failed rules. The angle is estimated as speed x time.
 - **Sensor silent for 0.5 s:** `/obstacle/detected` stays `True` until
   readings come back, and any turn ends as `failed`. A turn requested before
   the first reading also fails.
 - **Turn time:** the state machine cancels a turn after 10 s with no result.
-  At 1 rad/s the longest turn (270 degrees) takes about 4.7 s. Keep
-  `turn_speed` above about 0.5 rad/s, or lower `max_turn_deg` with it.
+  On the A1 one back-and-arc cycle takes about 2 s and three cycles about
+  5–6 s. On `diff`, the longest turn (270 degrees at 1 rad/s) takes 4.7 s.
 
 Every number above is a parameter in [config/avoidance.yaml](config/avoidance.yaml).
 
@@ -102,9 +116,11 @@ pip install coppeliasim-zmqremoteapi-client
 python tools/sim_avoidance.py ~/Robotic/Lab3_mat/Lab3_scene.ttt
 ```
 
-It puts a wall 1 m ahead and prints every stop and turn. The Lab 03 robot
-turns in place, so this doesn't test an Ackermann A1. Don't save over the lab
-scene afterwards.
+It puts a wall 1 m ahead and prints every stop and turn. By default it
+moves the robot like the A1 (`--drive ackermann`: bicycle model, no turning
+at zero speed); `--drive diff` uses the lab robot's own wheels. The lab's
+LiDAR sees 240 degrees, so the rear is blind in the sim. Don't save over the
+lab scene afterwards.
 
 ## Tests
 

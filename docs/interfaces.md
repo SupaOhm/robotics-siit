@@ -71,7 +71,9 @@ package on `main` (Lane 4).
 ### Obstacles and avoidance (Lane 3, D5)
 
 Lane 3's `obstacle_avoidance` topics, with one change to
-`/obstacle/detected` (fixed rate, safe start; needs PR #3).
+`/obstacle/detected` (fixed rate, safe start; needs PR #3). The A1 has
+Ackermann steering and can't turn in place, so `AVOID` is a three-point
+turn: it backs up, then arcs forward.
 
 | Topic | Type | From → To | Meaning |
 |---|---|---|---|
@@ -79,8 +81,9 @@ Lane 3's `obstacle_avoidance` topics, with one change to
 | `/obstacle/distance` | `std_msgs/Float32` | avoidance_node → anyone | Filtered front distance (m) |
 | `/avoidance/start` | `std_msgs/Empty` | state_machine → avoidance_node | Turn away from what is in front |
 | `/avoidance/cancel` | `std_msgs/Empty` | state_machine → avoidance_node | Stop turning |
-| `/avoidance/cmd_vel` | `geometry_msgs/Twist` | avoidance_node → state_machine | Turn command, only while turning |
+| `/avoidance/cmd_vel` | `geometry_msgs/Twist` | avoidance_node → state_machine | Turn command, only while turning. `linear.x` < 0 while backing up, > 0 while arcing; forward it as is |
 | `/avoidance/result` | `std_msgs/String` | avoidance_node → state_machine | One per turn: `done`, `failed` or `cancelled` |
+| `/imu/data_raw` | `sensor_msgs/Imu` | base driver → avoidance_node | Gyro z, to measure how far `AVOID` has turned. Published by Yahboom's `Ackman_driver_A1` |
 
 **No `/obstacle/detected` for 1 s → the state machine treats the path as
 blocked.** Silence only blocks `forward`. It never counts as an obstacle
