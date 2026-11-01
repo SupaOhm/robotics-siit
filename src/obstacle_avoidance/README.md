@@ -45,6 +45,12 @@ machine, launch with `cmd_vel_topic:=/cmd_vel`.
 
 ## How it decides
 
+- **Front (LiDAR):** the closest point in a corridor 0.20 m either side of
+  the robot's centre line, measured straight ahead. An earlier +-15 degree
+  cone was narrower than the robot, and in CoppeliaSim it missed obstacles at
+  the robot's shoulders until 0.17 m. Set `corridor_half_width` to half the
+  A1's width plus a margin. Beams with no return (0 from the YDLIDAR driver)
+  are skipped.
 - **Filter:** median of the last 5 readings. NaN and readings under 2 cm
   get dropped. `inf` and anything past 4 m count as 4 m.
 - **Threshold with hysteresis:** blocked at 0.30 m or closer, clear again
@@ -99,7 +105,7 @@ logic. They don't need ROS or a sensor.
 obstacle_avoidance/
   range_filter.py   median filter, glitch and out-of-range handling
   detector.py       stop / clear threshold with hysteresis
-  scan.py           LaserScan -> front / left / right distances
+  scan.py           LaserScan -> front (corridor) / left / right distances
   avoider.py        turn-away state machine
   avoidance_node.py thin ROS 2 node
 config/avoidance.yaml

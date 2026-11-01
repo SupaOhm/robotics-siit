@@ -44,7 +44,7 @@ class AvoidanceNode(Node):
         p("range_topic", "/ultrasonic/range")
         p("cmd_vel_topic", "/avoidance/cmd_vel")
         p("front_angle_deg", 0.0)
-        p("front_half_width_deg", 15.0)
+        p("corridor_half_width", 0.20)
         p("side_half_width_deg", 30.0)
         p("filter_window", 5)
         p("min_range", 0.02)
@@ -63,7 +63,7 @@ class AvoidanceNode(Node):
         g = lambda name: self.get_parameter(name).value
         self.input_type = g("input_type")
         self.front_angle = math.radians(float(g("front_angle_deg")))
-        self.front_half_width = math.radians(float(g("front_half_width_deg")))
+        self.corridor_half_width = float(g("corridor_half_width"))
         self.side_half_width = math.radians(float(g("side_half_width_deg")))
         self.sensor_timeout = float(g("sensor_timeout"))
 
@@ -112,7 +112,7 @@ class AvoidanceNode(Node):
     def on_scan(self, msg) -> None:
         front, left, right = front_left_right(
             msg.ranges, msg.angle_min, msg.angle_increment, self.front_angle,
-            self.front_half_width, self.side_half_width,
+            self.corridor_half_width, self.side_half_width,
             max(msg.range_min, self.front.min_range))
         self.left.update(left)
         self.right.update(right)

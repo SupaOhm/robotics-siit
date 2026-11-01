@@ -9,7 +9,8 @@ avoidance_node:
 
     # LiDAR only
     front_angle_deg: 0.0        # 180.0 if the LiDAR is mounted facing backward
-    front_half_width_deg: 15.0  # front sector is +-15 deg
+    corridor_half_width: 0.20   # front looks along a corridor this far either side
+                                # of the centre line (m): half the robot width + margin
     side_half_width_deg: 30.0   # left / right sectors are +-30 deg around +-90 deg
 
     filter_window: 5            # median of the last 5 readings
