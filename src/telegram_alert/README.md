@@ -167,9 +167,11 @@ test/
 
 ## Not done yet / known limits
 
-- **Not yet run against the real Telegram servers.** Tests use a fake
-  bot. The node has been built and started on ROS 2 Humble (Docker), but
-  not on the robot.
+- **Real Telegram: tested with `bot_demo` from a laptop** (Nov 1): photo
+  alert, no answer for 30 s, expired buttons, blocking card, Resume; and
+  photo alert then Allow. The ROS node itself has been built and started
+  on ROS 2 Humble (Docker), but not yet run with real Telegram or on the
+  robot.
 - If a send times out but did arrive, that message keeps its buttons. A
   press on it gets "no longer active" and publishes nothing.
 - `/robot/state` closing uses the state names in `docs/interfaces.md`
