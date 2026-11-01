@@ -1,7 +1,7 @@
 """Try the gestures on a laptop webcam, no ROS needed.
 
     pip install mediapipe
-    python -m gesture_control.webcam_demo --model ~/hand_landmarker.task
+    python -m gesture_control.webcam_demo --model ~/models/hand_landmarker.task
 
 Shows the camera with the hand skeleton, the centre deadzone and the word
 the node would publish. Word changes are printed. ESC or q quits.
@@ -19,7 +19,7 @@ def main(argv=None):
     d = ClassifierParams()
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--camera", type=int, default=0, help="camera index")
-    parser.add_argument("--model", default="~/hand_landmarker.task",
+    parser.add_argument("--model", default="~/models/hand_landmarker.task",
                         help="hand_landmarker.task path")
     parser.add_argument("--deadzone", type=float, default=d.deadzone_radius)
     parser.add_argument("--extend-ratio", type=float, default=d.extend_ratio)

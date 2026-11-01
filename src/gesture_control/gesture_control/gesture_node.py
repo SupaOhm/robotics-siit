@@ -37,7 +37,7 @@ class GestureNode(Node):
         p = self.declare_parameter
         p("input_mode", "camera")  # camera | keyboard
         p("camera_index", 0)
-        p("model_path", "~/hand_landmarker.task")
+        p("model_path", "~/models/hand_landmarker.task")
         p("publish_rate", 10.0)
         p("show_window", False)
         p("stale_s", 0.3)

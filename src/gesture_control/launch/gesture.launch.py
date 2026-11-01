@@ -14,7 +14,7 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument("input_mode", default_value="camera"),
         DeclareLaunchArgument("camera_index", default_value="0"),
-        DeclareLaunchArgument("model_path", default_value="~/hand_landmarker.task"),
+        DeclareLaunchArgument("model_path", default_value="~/models/hand_landmarker.task"),
         DeclareLaunchArgument("show_window", default_value="false"),
         Node(
             package="gesture_control",

@@ -78,10 +78,12 @@ Don't also install `opencv-python`: both provide `cv2` and overwrite each
 other. If pip pulls a numpy that clashes with Humble's apt numpy, pin the
 versions that work on the laptop (untested so far).
 
-Download the hand model once. Don't commit it (`*.task` is gitignored).
+Download the hand model once into `~/models/` (the same folder the YOLO
+model uses). Don't commit it (`*.task` is gitignored).
 
 ```bash
-wget -O ~/hand_landmarker.task \
+mkdir -p ~/models
+wget -O ~/models/hand_landmarker.task \
   https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task
 ```
 
@@ -121,8 +123,22 @@ ros2 topic hz /gesture/command      # ~10 Hz
 ```bash
 pip install mediapipe
 cd src/gesture_control
-python -m gesture_control.webcam_demo --model ~/hand_landmarker.task
+python -m gesture_control.webcam_demo --model ~/models/hand_landmarker.task
 ```
+
+On a Mac (Apple silicon or Intel), `tools/mac_gesture_demo.sh` does all of
+this: it finds Python 3.10 to 3.12, makes a venv in `.venv-gesture/`,
+installs MediaPipe, downloads the model and starts the demo. Run it from
+the repo root:
+
+```bash
+bash tools/mac_gesture_demo.sh            # set up (first time) and run
+bash tools/mac_gesture_demo.sh --camera 1 # any webcam_demo options pass through
+```
+
+The first run asks for camera access for your terminal app. If the window
+stays black, allow it in System Settings, Privacy & Security, Camera, then
+restart the terminal.
 
 The window shows the hand skeleton, the centre deadzone circle, the finger
 count, the angle and the word. Word changes are printed. ESC or q quits.
@@ -136,7 +152,7 @@ laptop and camera. Defaults are in [config/gesture.yaml](config/gesture.yaml).
 |---|---|---|
 | `input_mode` | `camera` | `camera` or `keyboard` |
 | `camera_index` | 0 | OpenCV camera index |
-| `model_path` | `~/hand_landmarker.task` | MediaPipe hand model |
+| `model_path` | `~/models/hand_landmarker.task` | MediaPipe hand model |
 | `show_window` | false | Draw landmarks and the word in a window |
 | `publish_rate` | 10.0 | Hz, fixed |
 | `stale_s` | 0.3 | No frame result this long: publish `none` (must be below 0.5) |
