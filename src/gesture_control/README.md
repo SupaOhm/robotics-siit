@@ -94,6 +94,21 @@ example a partial download), and the installed MediaPipe still has the old
 a warning. If neither works, the node logs an error and keeps publishing
 `none`.
 
+### On a Mac (RoboStack)
+
+ROS 2 Humble has no official macOS packages. `tools/mac_ros_setup.sh`
+installs it from RoboStack (conda) into an env called `ros_env`, sets
+`ROS_DOMAIN_ID=42` and CycloneDDS, installs MediaPipe, downloads the model
+and builds this package. Not yet tested on a Mac.
+
+```bash
+bash tools/mac_ros_setup.sh           # set up and build (first time, ~1 GB)
+bash tools/mac_ros_setup.sh check     # 8 s self-test: ~10 Hz on /gesture/command?
+bash tools/mac_ros_setup.sh run       # camera mode
+bash tools/mac_ros_setup.sh keyboard  # keyboard mode
+bash tools/mac_ros_setup.sh shell     # how to use the env in another terminal
+```
+
 ## Build and run
 
 ```bash
