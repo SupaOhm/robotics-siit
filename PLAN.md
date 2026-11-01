@@ -15,11 +15,13 @@ people with a password.
    table"). If the object is unknown or confidence is low, it says "Found an
    obstacle". Then it turns away and continues.
 4. **Person:** the robot asks for a password.
-   - Correct: it confirms out loud and passes.
+   - Correct: it confirms out loud, turns away and continues (D13).
    - Wrong (3 attempts): it plays an alert and sends a photo to the operator
      on Telegram with **Allow** / **Deny** buttons.
-     - Allow: it announces that the person may pass and continues.
-     - Deny, or no reply in 30 s: it keeps blocking and the alert continues.
+     - Allow: it announces that the person may pass, turns away and continues.
+     - Deny, or no reply in 30 s: it keeps blocking and the alert continues,
+       until the operator presses **Resume** or holds the `back` gesture. Then
+       it turns away (D11).
 
 ## Tech stack
 
@@ -27,7 +29,7 @@ people with a password.
 |---|---|
 | Robot | Yahboom RosmasterPi A1, ROS 2 (`ament_python`, colcon) |
 | Gesture control | OpenCV + MediaPipe (existing code), runs on the operator's laptop and sends drive commands to the robot over ROS |
-| Object detection | Pretrained YOLO (COCO) + spoken name table (class to English phrase) |
+| Object detection | Pretrained YOLO nano (COCO, NCNN export) on the robot's onboard pan-tilt camera, plus a spoken name table (class to English phrase) (D18, D20, D21) |
 | Distance sensing | See [D19](docs/decisions.md) (LiDAR if fitted, else front ultrasonic) |
 | Password | Spoken digits into the robot's USB microphone, recognised offline with Vosk (D22–D24). The merged `src/password_system` finger-count package is replaced by a new `password_node` |
 | Audio | Pre-recorded English clips |
@@ -59,9 +61,9 @@ people with a password.
 
 ### Phase 1: Architecture & setup (Oct 29 – 30)
 
-- [ ] Lane 1: define ROS nodes, topics and message types in `docs/interfaces.md`
+- [x] Lane 1: define ROS nodes, topics and message types in `docs/interfaces.md`
 - [ ] Lane 1: install OS / ROS 2 on the robot, confirm hardware works (including the microphone and voice module, for the spoken password)
-- [ ] Lane 5: benchmark YOLO + MediaPipe together on the robot, lock the FPS target
+- [ ] Lane 5: benchmark YOLO on the robot, lock the time limit per frame (gestures run on the laptop, D18)
 - [ ] Lane 6: draft the system architecture document
 
 ### Phase 2: Parallel development (Oct 31 – Nov 3)
@@ -70,7 +72,9 @@ people with a password.
 - [ ] Lane 2 (purin): gesture code as a ROS node on the laptop, sending drive commands to the robot
 - [ ] Lane 2 (ohm): YOLO deployed; person class; spoken name table in English (8–10 objects)
 - [ ] Lane 3: sensor driver, noise filter, avoidance turn logic
-- [ ] Lane 4: record audio clips; Telegram bot; spoken password (decide what is said, then speech recognition)
+- [ ] Lane 4: record audio clips and audio player
+- [x] Lane 4: Telegram bot
+- [ ] Lane 4: spoken password (`password_node`)
 - [ ] Lane 5: empty CoppeliaSim scene
 
 ### Phase 3: Simulation & integration (Nov 4 – 6)
@@ -94,67 +98,27 @@ people with a password.
 
 | Risk | Mitigation |
 |---|---|
-| MediaPipe + YOLO together drop FPS on the robot | Benchmark by Oct 30; run YOLO only when the robot stops; lower resolution / alternate frames; fallback to laptop inference over Wi-Fi |
+| YOLO is too slow on the robot | Benchmark on the robot (Lane 5); run YOLO only when the robot stops (D7); move it to the laptop over the hotspot if needed (D18) |
+| The robot is low, so at 0.30 m the camera may only see feet and a person could skip the password | Floor-level photo test (ohm); if people are missed, add a tilted frame in `CLASSIFY` |
+| The chassis may be Ackermann, so it can't turn in place (D6, D13) | Lane 1 confirms at bring-up; if so, `AVOID` needs a reverse and arc |
 | Low light hurts gesture and object recognition | Test in demo lighting early (Lane 5) |
 | YOLO doesn't know walls, doors, boxes | They fall back to "Found an obstacle" |
 | Telegram needs internet on the robot | Confirm the phone hotspot works at the demo venue (D17) |
 | A noisy room breaks speech recognition of the spoken password | Test in demo noise early (Lane 5) |
 
-## Open questions for Lane 1 (decide in Phase 1)
+## Open questions
 
-Decided: see [docs/decisions.md](docs/decisions.md) (Q1 = D11, Q2 = D12, Q3 = D13, Q4 = D19, Q5 = D14).
+Decided questions are in [docs/decisions.md](docs/decisions.md). Questions
+about the ROS contract, such as the `person` threshold and how far `AVOID`
+turns, are under "Still open" in [docs/interfaces.md](docs/interfaces.md).
 
-1. After Deny or timeout, what makes the robot stop blocking? (e.g. a Telegram
-   "Resume" button)
-2. After a correct password, how do we avoid asking the same person again on
-   the next distance check?
-3. When a person is cleared, does the robot steer around them, wait, or drive on?
-4. LiDAR or ultrasonic?
-5. After a wrong password, how does the operator decide: Telegram Allow / Deny
-   buttons, a hand gesture on the laptop camera (e.g. thumbs-up), or both? This
-   also decides whether Lane 2 adds a decision gesture.
-
-## Open questions for Lane 4
-
-Decided: see [docs/decisions.md](docs/decisions.md) (Q1 = D23, Q2 = D9: replaced by a new `password_node`).
-
-1. What exactly does the person say: a fixed passphrase, spoken digits, or an
-   answer to a question?
-2. What happens to the merged `src/password_system` finger-count package:
-   remove it, or keep it as a fallback for a noisy room?
-
-## Open questions for Lane 2
-
-1. (ohm) Which camera does object detection use: the robot's onboard camera, or
-   something else? (Gesture control uses the operator's laptop camera.)
-2. (purin) Is a decision gesture (e.g. thumbs-up / thumbs-down) needed? Depends on
-   Lane 1 question 5.
-3. (purin) How does the laptop gesture node send drive commands to the robot: ROS 2
-   over the same Wi-Fi network, and what happens if the link drops (stop
-   the robot)?
-4. (ohm) How does the detector tell a person from the operator or a bystander in
-   frame, and what confidence threshold counts as "person"?
-
-## Open questions for Lane 3
-
-1. How far from an obstacle does the robot stop, and how far does it turn
-   before resuming?
-2. Does the distance sensor cover the sides and rear, or only the front?
-3. After a person is cleared, who owns the route around them: Lane 3's
-   avoidance logic or Lane 1's state machine?
-
-## Open questions for Lane 5
-
-Decided: see [docs/decisions.md](docs/decisions.md) (Q3 = D27: typed input stands in for the mic, Telegram is the real bot).
-
-1. What FPS counts as "good enough" for gesture control and YOLO together?
-2. What demo conditions do we test in: lighting, background noise, Wi-Fi?
-3. Can the CoppeliaSim scene simulate the microphone (spoken password) and
-   the Telegram step, or are those tested only on the robot?
-
-## Open questions for Lane 6
-
-1. Does the report document the original gesture-password design as a
-   change, or only the final spoken-password design?
-2. Which scenarios does the demo video show (object naming, correct password,
-   wrong password, operator decision)?
+| Question | Owner |
+|---|---|
+| Is the chassis Ackermann? If so, do `AVOID` and the `left` / `right` gestures need to change? | Lane 1 (confirm), Lanes 2, 3 |
+| Is 0.30 m far enough for the camera to see a person? | ohm |
+| Which laptop runs `gesture_node`? It needs ROS 2 Humble | purin |
+| What FPS counts as good enough for gesture control? | Lane 5 |
+| What demo conditions do we test in: lighting, background noise, hotspot? | Lane 5 |
+| Who can answer Telegram alerts: one private chat, or a group of operators? | Lane 4 |
+| Does the report document the original gesture-password design as a change, or only the final spoken-password design? | Lane 6 |
+| Which scenarios does the demo video show (object naming, correct password, wrong password, operator decision)? | Lane 6 |
