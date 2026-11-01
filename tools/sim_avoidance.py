@@ -29,6 +29,7 @@ import argparse
 import math
 import sys
 import threading
+import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -124,11 +125,14 @@ def run(sim, args, log):
     t, t_stopped, yaw_start, avoids, phase, closest_seen = 0.0, 0.0, 0.0, 0, None, math.inf
     command = (0.0, 0.0)
     front_raw = rear_raw = math.inf  # latest valid scan, no filter delay: AVOID reacts to it
+    wall_start = time.monotonic()
     try:
         while t < args.seconds:
             t_prev = t
             sim.step()
             t = sim.getSimulationTime()
+            if args.realtime:
+                time.sleep(max(0.0, t - (time.monotonic() - wall_start)))
             move(*command, t - t_prev)
             data = sim.getBufferProperty(hokuyo, "customData.lidarScan", {"noError": True})
             scan = sim.unpackTable(data) if data else None
@@ -203,6 +207,7 @@ def main():
     parser.add_argument("--config", default=str(REPO / "src/obstacle_avoidance/config/avoidance.yaml"))
     parser.add_argument("--drive", choices=("ackermann", "diff"), help="default: drive_type in the config")
     parser.add_argument("--seconds", type=float, default=45.0, help="simulated time to run")
+    parser.add_argument("--realtime", action="store_true", help="run at real speed, to watch it")
     parser.add_argument("--wall-ahead", type=float, default=1.0, help="m from the robot to the wall")
     parser.add_argument("--host", default="localhost")
     parser.add_argument("--port", type=int, default=23000)
