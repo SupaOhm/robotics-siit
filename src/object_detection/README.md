@@ -23,14 +23,21 @@ the robot: a named object, a person, or an unknown obstacle.
 
 ## Setup
 
-The model isn't in the repo. Export it once, in the folder you launch from:
+The model isn't in the repo. Export it once:
 
 ```bash
 pip install "numpy==1.26.4" "opencv-python<4.12" ultralytics ncnn
+mkdir -p ~/models && cd ~/models
 yolo export model=yolo11n.pt format=ncnn imgsz=320
 ```
 
-This creates `yolo11n_ncnn_model/`, which `model_path` points to.
+This creates `~/models/yolo11n_ncnn_model/`, which `model_path` points to, so
+you can launch from any folder. If you exported it somewhere else before, move
+that folder here.
+
+`~` is the home folder of whoever runs the node. With `sudo` or in Docker, that
+is a different folder, so the model has to be there too. If the model is
+missing, the node stops at start-up and the error gives the path it tried.
 
 Keep the NumPy pin. A plain `pip install ultralytics` installs NumPy 2, and
 then `cv_bridge` on ROS 2 Humble fails to import, for every node that uses it.

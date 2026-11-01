@@ -28,7 +28,7 @@ class DetectorNode(Node):
     def __init__(self):
         super().__init__("detector_node")
         p = self.declare_parameter
-        p("model_path", "yolo11n_ncnn_model")
+        p("model_path", "~/models/yolo11n_ncnn_model")
         p("image_size", 320)
         p("person_threshold", 0.25)
         p("object_threshold", 0.5)

@@ -1,7 +1,7 @@
 detector_node:
   ros__parameters:
-    # Exported NCNN folder, relative to where you launch from. See the README.
-    model_path: "yolo11n_ncnn_model"
+    # Exported NCNN folder. ~ is your home folder. See the README.
+    model_path: "~/models/yolo11n_ncnn_model"
     image_size: 320
 
     # Starting values, to tune on the robot in Phase 4. person is low on
