@@ -89,6 +89,23 @@ Check the Yahboom sensor topic with `ros2 topic list` and set `scan_topic`
 or `range_topic` to match. If the LiDAR's 0 degree points backward, set
 `front_angle_deg: 180.0`.
 
+## Try it in CoppeliaSim (no ROS)
+
+[`tools/sim_avoidance.py`](../../tools/sim_avoidance.py) drives the course's
+Lab 03 robot (differential drive, Hokuyo LiDAR) with this package's filter,
+detector and avoider over CoppeliaSim's ZMQ API. It runs on macOS too. The
+lab scene isn't in the repo, so pass the path to your copy:
+
+```bash
+pip install coppeliasim-zmqremoteapi-client
+# open CoppeliaSim first
+python tools/sim_avoidance.py ~/Robotic/Lab3_mat/Lab3_scene.ttt
+```
+
+It puts a wall 1 m ahead and prints every stop and turn. The Lab 03 robot
+turns in place, so this doesn't test an Ackermann A1. Don't save over the lab
+scene afterwards.
+
 ## Tests
 
 ```bash
