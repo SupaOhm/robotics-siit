@@ -96,7 +96,7 @@ A sensor that fails while the node is running is different: the topic goes
 |---|---|---|---|
 | `/camera/image_raw` | `sensor_msgs/Image` | camera driver → detector, telegram | Onboard camera (D21). Real topic name confirmed at bring-up |
 | `/detect/request` | `std_msgs/String` | state_machine → detector_node | Request id. Classify what is in front now (D7) |
-| `/detect/result` | `std_msgs/String` (JSON) | detector_node → state_machine | Exactly one reply per request, with the same `id` (D8) |
+| `/detect/result` | `std_msgs/String` (JSON) | detector_node → state_machine | At most one reply per request, with the same `id`; none if there's no camera frame or YOLO fails (D8) |
 
 ```json
 {"id": "d7", "kind": "object",  "label": "chair",  "confidence": 0.82, "clip": "found_chair"}
@@ -137,9 +137,9 @@ topic is never used on the robot.
 
 - Requests that arrive while a clip plays are **queued**, not dropped.
   `alert` interrupts and plays at once.
-- In `BLOCKING`, publish `alert` first, then `blocking`, and repeat no
-  faster than the two clips take to play (about 2.4 s). `blocking` sent
-  just before `alert` gets cut off, and faster repeats build up a queue.
+- In `BLOCKING`, publish `alert` first, then `blocking`, and repeat every
+  3 s (the two clips take about 2.5 s). `blocking` sent just before
+  `alert` gets cut off, and faster repeats build up a queue.
 - The cooldown (same clip not repeated within N s) applies only to
   `found_*` clips.
 
@@ -149,7 +149,7 @@ topic is never used on the robot.
 | `found_obstacle` | "Found an obstacle" | state_machine (`ANNOUNCE`, avoidance failed) |
 | `password_prompt` | "Say the password" | password_node |
 | `password_wrong` | "Wrong, try again" | password_node |
-| `password_denied` | "Access denied, calling the operator" | password_node (after 3 wrong) |
+| `password_denied` | "Access denied, calling the operator" | password_node (after 3 wrong, or 3 mic or speech engine failures in a row) |
 | `password_correct` | "Password correct, you may pass" | state_machine (`PASS` after `granted`) |
 | `operator_allowed` | "The operator has allowed you to pass" | state_machine (`PASS` after `allow`) |
 | `alert` | Alert sound | state_machine (`BLOCKING`) |
