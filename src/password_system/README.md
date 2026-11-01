@@ -40,6 +40,11 @@ What the person says is never published or logged.
 | Spoke, but no digit was recognized | Yes |
 | Microphone or speech engine failed (unplugged, busy, engine error) | No. But 3 in a row end the session as `denied`, so the operator decides |
 
+At start-up the node listens to the room for 1 s to set how loud speech
+must be (`energy_threshold`), so keep quiet near the robot when it starts.
+The threshold then stays fixed: an adaptive one also rose while the
+person was talking and cut off a softer last digit.
+
 Before each attempt the node waits `listen_delay` (2.5 s), so it doesn't
 record its own prompt clip. The prompt clips must be shorter than that.
 Worst case is 3 attempts of about 14 s each, which fits the state machine's
@@ -164,6 +169,7 @@ clips and results each step publishes, and Vosk / Google result parsing.
 | `max_service_errors` | 3 | Mic or engine failures before handing over to the operator |
 | `mic_device_index` | -1 | The wrong microphone is used |
 | `sim_timeout` | 8.5 s | Sim only: time to type an attempt before it counts as silence |
+| `energy_threshold` | 0 (measure at start-up) | Digits get cut off or silence is taken as speech. The node logs the value it measured; set a fixed one if the room's noise changes after start-up |
 
 ## Files
 

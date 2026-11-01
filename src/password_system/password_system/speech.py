@@ -62,6 +62,7 @@ class SpeechListener:
         phrase_time_limit: float = 5.0,
         vosk_model_path: str = "",
         operation_timeout: float = 10.0,
+        energy_threshold: float = 0.0,
     ):
         if engine not in ENGINES:
             raise ValueError("engine must be one of %s" % (ENGINES,))
@@ -73,7 +74,13 @@ class SpeechListener:
         self.listen_timeout = listen_timeout
         self.phrase_time_limit = phrase_time_limit
         self.recognizer = sr.Recognizer()
-        self.recognizer.dynamic_energy_threshold = True
+        # Fixed threshold, set by calibrate() or energy_threshold. The dynamic
+        # one also rises *during* speech (SpeechRecognition 3.17), so a softer
+        # last digit counted as silence and was cut off: "zero zero eight six"
+        # was heard as "zero zero eight".
+        self.recognizer.dynamic_energy_threshold = False
+        if energy_threshold > 0:
+            self.recognizer.energy_threshold = energy_threshold
         # Google only: give up on a dropped connection instead of hanging
         self.recognizer.operation_timeout = operation_timeout
 
@@ -93,7 +100,7 @@ class SpeechListener:
         return self._sr.Microphone(device_index=self.device_index)
 
     def calibrate(self, seconds: float = 1.0) -> None:
-        """Measure background noise to set the speech energy threshold.
+        """Measure background noise to set the (fixed) speech energy threshold.
         Raises if the microphone can't be opened."""
         with self._microphone() as source:
             self.recognizer.adjust_for_ambient_noise(source, duration=seconds)

@@ -55,3 +55,13 @@ def test_vosk_needs_a_model_folder(tmp_path):
         SpeechListener(engine="vosk", vosk_model_path="")
     with pytest.raises(ValueError, match="vosk_model_path"):
         SpeechListener(engine="vosk", vosk_model_path=str(tmp_path / "missing"))
+
+
+def test_energy_threshold_is_fixed():
+    # the dynamic threshold rose during speech and cut off a soft last digit
+    import pytest
+    pytest.importorskip("speech_recognition")
+    from password_system.speech import SpeechListener
+    listener = SpeechListener(engine="google", energy_threshold=450)
+    assert listener.recognizer.dynamic_energy_threshold is False
+    assert listener.recognizer.energy_threshold == 450

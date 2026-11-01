@@ -44,6 +44,7 @@ class PasswordNode(Node):
         p("listen_timeout", 6.0)
         p("phrase_time_limit", 5.0)
         p("operation_timeout", 10.0)
+        p("energy_threshold", 0.0)  # mic loudness that counts as speech; 0 = calibrate at startup
         p("sim_timeout", 8.5)  # sim: no typed attempt this long -> silence; 0 = off
 
         g = lambda name: self.get_parameter(name).value
@@ -91,9 +92,13 @@ class PasswordNode(Node):
                 phrase_time_limit=float(g("phrase_time_limit")),
                 vosk_model_path=g("vosk_model_path"),
                 operation_timeout=float(g("operation_timeout")),
+                energy_threshold=float(g("energy_threshold")),
             )
             try:
-                self.listener.calibrate()
+                if float(g("energy_threshold")) <= 0:
+                    self.listener.calibrate()  # stay quiet for 1 s at start-up
+                self.get_logger().info("speech energy threshold %.0f"
+                                       % self.listener.recognizer.energy_threshold)
             except Exception as e:
                 # Keep running: each attempt reports a service error, and 3 in a
                 # row end as "denied", so the operator still gets the alert.
