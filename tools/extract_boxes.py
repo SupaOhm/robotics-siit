@@ -38,8 +38,8 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 PACKAGE = ROOT / "src" / "object_detection"
 sys.path.insert(0, str(PACKAGE))
-from object_detection.classifier import (  # noqa: E402
-    Detection, classify, parse_name_table)
+from object_detection.recorded import (  # noqa: E402
+    answer, needed_share, read_settings)
 from object_detection.yolo_backend import YoloDetector  # noqa: E402
 
 BOX_CONFIDENCE = 0.10      # keep weak boxes too, so thresholds can go lower
@@ -49,35 +49,12 @@ PHOTO_TYPES = (".heic", ".jpg", ".jpeg", ".png")
 IMAGE_TYPES = ("sensor_msgs/msg/Image", "sensor_msgs/msg/CompressedImage")
 
 
-def read_settings():
-    """The robot's own thresholds and name table, from config/detector.yaml."""
-    text = (PACKAGE / "config" / "detector.yaml").read_text()
-    return {
-        "image_size": int(re.search(r"image_size:\s*(\d+)", text)[1]),
-        "person": float(re.search(r"person_threshold:\s*([\d.]+)", text)[1]),
-        "object": float(re.search(r"object_threshold:\s*([\d.]+)", text)[1]),
-        "names": parse_name_table(
-            re.findall(r'^\s*-\s*"([^"]+=[^"]+)"', text, re.M)),
-    }
-
-
 def expected_from_name(name):
     """"chair_close" -> "chair"; "obstacle_desk" -> "unknown"; IMG_5017 -> None."""
     match = re.match(r"([a-z]+)_", name)
     if not match:
         return None
     return "unknown" if match[1] == "obstacle" else match[1]
-
-
-def answer(boxes, settings):
-    """What the robot would say for one frame's boxes."""
-    # The robot runs YOLO at the lower threshold, so it never sees weaker
-    # boxes. The JSON keeps them only so the thresholds can be lowered.
-    floor = min(settings["person"], settings["object"])
-    detections = [Detection(n, c, a) for n, c, a in boxes if c >= floor]
-    result = classify("x", detections, settings["names"],
-                      settings["person"], settings["object"])
-    return result["label"] or result["kind"]
 
 
 class Boxes:
@@ -251,8 +228,7 @@ def report(entries, key, settings):
         else:
             right = sum(answer(f, settings) == e["expect"] for f in e["frames"])
             share = right / len(e["frames"])
-            needed = 1.0 if e["expect"] == "person" else 0.8
-            verdict = "pass" if share >= needed else "FAIL"
+            verdict = "pass" if share >= needed_share(e["expect"]) else "FAIL"
             print("%-16s expect %-8s right %2d/%-2d (%3.0f%%)  %s%s"
                   % (e[key], e["expect"], right, len(e["frames"]),
                      share * 100, verdict, miss))
@@ -277,7 +253,7 @@ def main():
         sys.exit("%s isn't a %s file: photos go in floor_photos.json, "
                  "recordings in robot_frames.json" % (args.json, key))
 
-    settings = read_settings()
+    settings = read_settings(PACKAGE / "config" / "detector.yaml")
     boxes = Boxes(os.path.expanduser(args.model), settings["image_size"])
     found = list(read(args.session, boxes))
     report(merge(args.json, entries, key, found), key, settings)
