@@ -4,9 +4,10 @@ No ROS or YOLO imports, so the rules can be tested on any laptop.
 
 Rules (docs/interfaces.md, D8):
   - Any person above the person threshold wins, whatever else is in frame.
-  - Otherwise look at the largest box, which is usually what blocks the robot.
-    It names the object only if it is in the name table and above the object
-    threshold. Anything else is an unknown obstacle.
+  - Otherwise look at the largest box above the object threshold, which is
+    usually what blocks the robot. Weaker boxes are ignored, so a vague larger
+    shape can't hide a clear bottle. It names the object only if it is in the
+    name table. Anything else is an unknown obstacle.
 """
 
 from dataclasses import dataclass
@@ -50,11 +51,12 @@ def classify(request_id: str, detections: Sequence[Detection],
         best = max(people, key=lambda d: d.confidence)
         return _result(request_id, PERSON, PERSON, best.confidence, None)
 
-    others = [d for d in detections if d.name != PERSON]
+    others = [d for d in detections
+              if d.name != PERSON and d.confidence >= object_threshold]
     if others:
         largest = max(others, key=lambda d: d.area)
         label = names.get(largest.name)
-        if label is not None and largest.confidence >= object_threshold:
+        if label is not None:
             return _result(request_id, "object", label, largest.confidence,
                            "found_" + label)
     return _result(request_id, "unknown", None, 0.0, UNKNOWN_CLIP)

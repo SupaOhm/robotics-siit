@@ -53,8 +53,14 @@ def test_largest_box_is_named_not_the_most_confident():
     assert result["label"] == "chair"
 
 
-def test_largest_box_below_threshold_is_unknown():
-    result = run(Detection("chair", 0.4, 9000), Detection("bottle", 0.9, 100))
+def test_weak_larger_box_does_not_hide_a_confident_object():
+    # Photo IMG_5044: a confident bottle in front of a weak office chair.
+    result = run(Detection("chair", 0.44, 9000), Detection("bottle", 0.83, 100))
+    assert result["label"] == "bottle"
+
+
+def test_only_weak_boxes_is_unknown():
+    result = run(Detection("chair", 0.4, 9000), Detection("bottle", 0.3, 100))
     assert result["kind"] == "unknown"
 
 
