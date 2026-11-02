@@ -68,6 +68,13 @@ Rules that span packages:
 - Keep NumPy below 2 anywhere `cv_bridge` runs. Humble's `cv_bridge` fails to import with NumPy 2, and `pip install ultralytics` pulls it in unless it's pinned.
 - Benchmarks and one-off scripts go in `tools/`, and CoppeliaSim scenes in `sim/`.
 
+## Behavioural guidelines
+
+- **Think first.** State your assumptions. If a request has two readings or something is unclear, ask instead of picking one silently.
+- **Keep it simple.** Write the least code that solves the problem: no features, options or abstractions nobody asked for.
+- **Make surgical changes.** Touch only what the task needs and match the existing style. Mention unrelated problems instead of fixing them.
+- **Define done.** Turn the task into a check, usually a test that fails first, and keep going until it passes.
+
 ## Workflow
 
 - `main` is protected: open a PR from a `lane<N>/<short-topic>` branch, with one approval and passing CI.
@@ -78,4 +85,4 @@ Rules that span packages:
 
 ## Current state
 
-`src/password_system` (finger-count password) is superseded by the spoken `password_node`, and it uses `mp.solutions`, which current MediaPipe no longer has. Other packages live on lane branches until their PRs merge, so check open PRs before assuming a node doesn't exist. The node table in `docs/interfaces.md` treats package names as suggestions, so a package's real name can differ from it.
+Other packages live on lane branches until their PRs merge, so check open PRs before assuming a node doesn't exist. The node table in `docs/interfaces.md` treats package names as suggestions, so a package's real name can differ from it.
