@@ -25,6 +25,7 @@ class AudioPlayer:
 
         self.closed = False
         self.playing = False
+        self.current_clip = None
 
         self.worker = threading.Thread(
             target=self._worker,
@@ -47,6 +48,11 @@ class AudioPlayer:
         with self.condition:
             if self.closed:
                 return False
+            # Do not queue duplicate alert or blocking clips
+            if clip_id in ("alert", "blocking"):
+                if clip_id == self.current_clip or clip_id in self.queue:
+                    print(f"[DUPLICATE] {clip_id}", flush=True)
+                    return False
 
             now = time.monotonic()
 
@@ -105,7 +111,11 @@ class AudioPlayer:
                     process.kill()
                     process.wait()
                 return True
-
+        # Check whether aplay actually succeeded
+        if process.returncode != 0:
+            raise RuntimeError(
+                f"aplay failed with exit code {process.returncode}"
+            )
         return False
 
     def _worker(self):
@@ -120,6 +130,7 @@ class AudioPlayer:
                 clip_id = self.queue.popleft()
                 self.interrupt.clear()
                 self.playing = True
+                self.current_clip = clip_id
 
             print(f"[PLAY] {clip_id}", flush=True)
 
@@ -139,6 +150,7 @@ class AudioPlayer:
             finally:
                 with self.condition:
                     self.playing = False
+                    self.current_clip = None
                     self.condition.notify_all()
 
     def wait_until_idle(self, timeout=30):
