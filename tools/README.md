@@ -1,10 +1,11 @@
 # tools
 
-Scripts that run on a laptop, not on the robot.
+Scripts that sit outside the ROS packages. Each tool has a section below that
+names its lane; add one for yours.
 
-## extract_boxes.py
+## extract_boxes.py (Lane 2)
 
-Runs the object detector (Lane 2, `src/object_detection`) on a laptop, on
+Runs the object detector (`src/object_detection`) on a laptop, on
 phone photos or on recordings from the robot's camera. YOLO runs once and the
 boxes go to a JSON file in `src/object_detection/test/`. The tests then apply
 the rules with the thresholds in `config/detector.yaml`, so you can tune a
