@@ -2,7 +2,7 @@
 # Set up and run the gesture_control webcam demo on a Mac, without ROS.
 #
 #   bash tools/mac_gesture_demo.sh             # set up (first time) and run
-#   bash tools/mac_gesture_demo.sh --camera 1  # options pass to webcam_demo
+#   bash tools/mac_gesture_demo.sh --camera-name iPhone  # options pass to webcam_demo
 #   bash tools/mac_gesture_demo.sh --setup-only
 #
 # What it does:

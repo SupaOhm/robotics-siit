@@ -33,13 +33,22 @@ die() { printf '\nERROR: %s\n' "$*" >&2; exit 1; }
 
 [ "$(uname -s)" = "Darwin" ] || die "this script is for macOS. On Ubuntu 22.04, follow src/gesture_control/README.md."
 
+apple_silicon() { [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = "1" ]; }
+
+# On Apple silicon, skip x86_64 (Rosetta) conda installs: MediaPipe has no x86_64 macOS wheel.
 find_conda() {
-  if command -v conda >/dev/null 2>&1; then command -v conda; return; fi
-  for c in /opt/homebrew/Caskroom/miniforge/base/bin/conda \
+  local c base
+  for c in "$(command -v conda 2>/dev/null || true)" \
+           /opt/homebrew/Caskroom/miniforge/base/bin/conda \
            /usr/local/Caskroom/miniforge/base/bin/conda \
            "$HOME/miniforge3/bin/conda" "$HOME/mambaforge/bin/conda" \
            "$HOME/miniconda3/bin/conda" "$HOME/anaconda3/bin/conda"; do
-    if [ -x "$c" ]; then echo "$c"; return; fi
+    [ -n "$c" ] && [ -x "$c" ] || continue
+    if apple_silicon; then
+      base="$("$c" info --base 2>/dev/null)" || continue
+      file -L "$base/bin/python" | grep -q arm64 || continue
+    fi
+    echo "$c"; return
   done
 }
 
@@ -69,9 +78,14 @@ do_setup() {
   # 1. conda
   local conda_bin; conda_bin="$(find_conda)"
   if [ -z "$conda_bin" ]; then
-    command -v brew >/dev/null 2>&1 || die "neither conda nor Homebrew found. Install Homebrew from https://brew.sh, then re-run."
+    local brew_bin; brew_bin="$(command -v brew || true)"
+    if apple_silicon; then
+      brew_bin=/opt/homebrew/bin/brew
+      [ -x "$brew_bin" ] || die "no native conda and no arm64 Homebrew at /opt/homebrew. Install Homebrew from https://brew.sh, then re-run."
+    fi
+    [ -n "$brew_bin" ] || die "neither conda nor Homebrew found. Install Homebrew from https://brew.sh, then re-run."
     say "Installing Miniforge with Homebrew"
-    brew install --cask miniforge
+    if apple_silicon; then arch -arm64 "$brew_bin" install --cask miniforge; else "$brew_bin" install --cask miniforge; fi
     conda_bin="$(find_conda)"
     [ -n "$conda_bin" ] || die "Miniforge installed but conda not found. Open a new terminal and re-run."
   fi

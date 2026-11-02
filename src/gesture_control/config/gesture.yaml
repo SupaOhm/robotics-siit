@@ -1,6 +1,6 @@
 gesture_node:
   ros__parameters:
-    # input_mode (camera | keyboard), camera_index, model_path and show_window
+    # input_mode (camera | keyboard), camera_index, camera_name, model_path and show_window
     # are launch arguments:
     #   ros2 launch gesture_control gesture.launch.py show_window:=true
     # Keyboard mode needs a terminal, so use ros2 run:

@@ -50,32 +50,44 @@ def draw_overlay(frame, landmarks, result, word: str, deadzone_radius: float) ->
 
 def run_camera(pipeline: GesturePipeline, on_word: Callable[[str, float], None],
                stop: threading.Event, camera_index: int = 0, model_path: str = "",
+               camera_name: str = "",
                show_window: bool = False, esc_quits: bool = False,
                log: Callable[[str], None] = print,
                clock: Callable[[], float] = time.monotonic,
                window_name: str = "gesture_control") -> None:
-    """Run until ``stop`` is set (or ESC / q in the window if ``esc_quits``)."""
+    """Run until ``stop`` is set (or ESC / q in the window if ``esc_quits``).
+
+    ``camera_name`` (macOS) picks the camera by name and overrides
+    ``camera_index``; it is looked up again on every reopen, as indices shift.
+    """
     import cv2
 
+    from .camera_select import resolve_camera
     from .hand_tracker import HandTracker
 
     tracker = HandTracker(model_path, log=log)
     log("hand tracker backend: %s" % tracker.backend)
     cap: Optional[object] = None
     failing = False
+    opened_index: Optional[int] = None
     try:
         while not stop.is_set():
             if cap is None:
-                cap = cv2.VideoCapture(camera_index)
+                index = resolve_camera(camera_name, camera_index,
+                                       log=log if not failing else lambda _m: None)
+                cap = cv2.VideoCapture(index)
                 if not cap.isOpened():
                     if not failing:
-                        log("cannot open camera %d, retrying" % camera_index)
+                        log("cannot open camera %d, retrying" % index)
                         failing = True
                     cap.release()
                     cap = None
                     pipeline.reset()
                     stop.wait(1.0)
                     continue
+                if index != opened_index:
+                    log("camera %d opened%s" % (index, " (%s)" % camera_name if camera_name else ""))
+                    opened_index = index
             ok, frame = cap.read()
             if not ok or frame is None:
                 if not failing:

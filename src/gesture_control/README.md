@@ -120,7 +120,7 @@ source install/setup.bash
 # OpenCV GUI calls off the main thread (rclpy owns it): best effort, not yet
 # tested on the laptop. webcam_demo below is the reliable overlay.
 ros2 launch gesture_control gesture.launch.py show_window:=true
-ros2 launch gesture_control gesture.launch.py camera_index:=1 model_path:=/path/to/hand_landmarker.task
+ros2 launch gesture_control gesture.launch.py camera_index:=1 camera_name:="" model_path:=/path/to/hand_landmarker.task
 
 # Keyboard, no camera (for Lane 1 / Lane 5 tests). Needs a terminal, so ros2 run:
 ros2 run gesture_control gesture_node --ros-args -p input_mode:=keyboard
@@ -148,7 +148,7 @@ the repo root:
 
 ```bash
 bash tools/mac_gesture_demo.sh            # set up (first time) and run
-bash tools/mac_gesture_demo.sh --camera 1 # any webcam_demo options pass through
+bash tools/mac_gesture_demo.sh --camera-name iPhone # any webcam_demo options pass through
 ```
 
 The first run asks for camera access for your terminal app. If the window
@@ -166,7 +166,8 @@ laptop and camera. Defaults are in [config/gesture.yaml](config/gesture.yaml).
 | Parameter | Default | Meaning |
 |---|---|---|
 | `input_mode` | `camera` | `camera` or `keyboard` |
-| `camera_index` | 0 | OpenCV camera index |
+| `camera_index` | 0 | OpenCV camera index. Used on Linux, or when `camera_name` is empty or matches no camera |
+| `camera_name` | `FaceTime` | macOS: open the camera whose name or model contains this (any case). Overrides `camera_index`, so a connected iPhone (Continuity Camera) is not picked. `""` uses `camera_index` |
 | `model_path` | `~/models/hand_landmarker.task` | MediaPipe hand model |
 | `show_window` | false | Draw landmarks and the word in a window |
 | `publish_rate` | 10.0 | Hz, fixed |
@@ -207,6 +208,7 @@ gesture_control/
   command_source.py  LatestWord (stale -> none) and the classifier + smoother pipeline
   keyboard_source.py keyboard input mode
   hand_tracker.py    MediaPipe Tasks HandLandmarker, mp.solutions fallback
+  camera_select.py   macOS: camera name -> OpenCV index (no ROS)
   camera_loop.py     webcam -> tracker -> pipeline loop, overlay drawing
   gesture_node.py    ROS 2 node (contract v0.3)
   webcam_demo.py     laptop demo without ROS

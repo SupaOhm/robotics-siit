@@ -37,6 +37,7 @@ class GestureNode(Node):
         p = self.declare_parameter
         p("input_mode", "camera")  # camera | keyboard
         p("camera_index", 0)
+        p("camera_name", "FaceTime")  # macOS: overrides camera_index; "" = use the index
         p("model_path", "~/models/hand_landmarker.task")
         p("publish_rate", 10.0)
         p("show_window", False)
@@ -80,7 +81,8 @@ class GestureNode(Node):
                              float(g("dropout_hold_s"))))
             self._worker = threading.Thread(
                 target=self._run_camera,
-                args=(int(g("camera_index")), g("model_path"), bool(g("show_window"))),
+                args=(int(g("camera_index")), str(g("camera_name")), g("model_path"),
+                      bool(g("show_window"))),
                 daemon=True)
         elif self.mode == "keyboard":
             from .keyboard_source import HELP, KeyboardCommand
@@ -113,12 +115,13 @@ class GestureNode(Node):
             self.get_logger().info("word: %s" % word)
             self._last_logged = word
 
-    def _run_camera(self, camera_index, model_path, show_window) -> None:
+    def _run_camera(self, camera_index, camera_name, model_path, show_window) -> None:
         from .camera_loop import run_camera
         log = self.get_logger()
         try:
             run_camera(self.pipeline, self.latest.set, self._stop,
-                       camera_index=camera_index, model_path=model_path,
+                       camera_index=camera_index, camera_name=camera_name,
+                       model_path=model_path,
                        show_window=show_window, log=log.warning, clock=self.clock)
         except Exception as e:
             # Node stays up and keeps publishing "none" (the word goes stale).

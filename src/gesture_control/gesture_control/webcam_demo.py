@@ -19,6 +19,8 @@ def main(argv=None):
     d = ClassifierParams()
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--camera", type=int, default=0, help="camera index")
+    parser.add_argument("--camera-name", default="FaceTime",
+                        help="macOS: camera name, overrides --camera; '' to use the index")
     parser.add_argument("--model", default="~/models/hand_landmarker.task",
                         help="hand_landmarker.task path")
     parser.add_argument("--deadzone", type=float, default=d.deadzone_radius)
@@ -42,6 +44,7 @@ def main(argv=None):
     stop = threading.Event()
     try:
         run_camera(pipeline, on_word, stop, camera_index=args.camera,
+                   camera_name=args.camera_name,
                    model_path=args.model, show_window=True, esc_quits=True)
     except KeyboardInterrupt:
         pass

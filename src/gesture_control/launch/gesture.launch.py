@@ -14,6 +14,7 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument("input_mode", default_value="camera"),
         DeclareLaunchArgument("camera_index", default_value="0"),
+        DeclareLaunchArgument("camera_name", default_value="FaceTime"),
         DeclareLaunchArgument("model_path", default_value="~/models/hand_landmarker.task"),
         DeclareLaunchArgument("show_window", default_value="false"),
         Node(
@@ -25,6 +26,8 @@ def generate_launch_description():
                 "input_mode": LaunchConfiguration("input_mode"),
                 "camera_index": ParameterValue(LaunchConfiguration("camera_index"),
                                                value_type=int),
+                "camera_name": ParameterValue(LaunchConfiguration("camera_name"),
+                                              value_type=str),
                 "model_path": LaunchConfiguration("model_path"),
                 "show_window": ParameterValue(LaunchConfiguration("show_window"),
                                               value_type=bool),
