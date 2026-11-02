@@ -15,7 +15,7 @@ def resolve_model_path(model_path: str) -> str:
     path = os.path.abspath(os.path.expanduser(model_path))
     if not os.path.exists(path):
         raise FileNotFoundError(
-            "YOLO model not found at %r. Export it first: see Setup in the "
+            "YOLO model not found at '%s'. Export it first: see Setup in the "
             "object_detection README." % path)
     return path
 

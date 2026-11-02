@@ -36,6 +36,15 @@ def test_error_for_a_relative_path_gives_the_full_location(tmp_path, monkeypatch
     assert str(tmp_path.resolve() / "nope") in str(error.value)
 
 
+def test_error_shows_a_windows_path_as_typed(monkeypatch):
+    # %r would double every backslash, so the user couldn't copy the path.
+    windows = r"C:\Users\robot\models\yolo.onnx"
+    monkeypatch.setattr("os.path.abspath", lambda path: windows)
+    with pytest.raises(FileNotFoundError) as error:
+        resolve_model_path("nope")
+    assert windows in str(error.value)
+
+
 def test_detector_checks_the_model_before_loading_ultralytics(tmp_path):
     with pytest.raises(FileNotFoundError, match="README"):
         YoloDetector(str(tmp_path / "nope"), 320, 0.25)
