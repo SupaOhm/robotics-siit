@@ -15,7 +15,7 @@ Read these before changing behaviour:
 
 ## Commands
 
-Building needs ROS 2 Humble (the robot, Ubuntu 22.04, or Docker). macOS can't run it.
+Building needs ROS 2 Humble (the robot, Ubuntu 22.04, or Docker). macOS has no official packages; on a Mac, `tools/mac_ros_setup.sh` installs Humble from RoboStack (conda) and builds `gesture_control` (tested on an M1).
 
 ```bash
 colcon build --symlink-install                # whole workspace

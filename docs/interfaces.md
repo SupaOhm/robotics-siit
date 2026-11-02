@@ -61,7 +61,8 @@ package name `password_system` (Lane 4).
 | `/gesture/command` | `std_msgs/String` | gesture_node → state_machine | `forward`, `back`, `left`, `right`, `stop` or `none`. Sent at **10 Hz** (D3, D4) |
 | `/cmd_vel` | `geometry_msgs/Twist` | state_machine → base driver | The only command the wheels obey |
 
-- `none` means no hand is seen. In `DRIVE` it sets the speed to zero, so
+- `none` means no hand is seen, or an open hand is held in the neutral
+  centre zone. In `DRIVE` it sets the speed to zero, so
   the robot never drives on without a hand. In every other state it only
   counts as a heartbeat and doesn't interrupt anything (e.g. `AVOID`).
 - `stop` is a deliberate gesture and stops the wheels in every state.

@@ -13,7 +13,7 @@ bring-up checklist is in [robot-setup.md](robot-setup.md).
 |---|---|---|---|---|
 | D1 | Message types | Standard `std_msgs` / `geometry_msgs` / `sensor_msgs`, JSON in a `String` when structured | Custom `robot_interfaces` package (every lane waits for its build) | All |
 | D2 | Who owns `/cmd_vel` | Only the state machine. Others publish their own `/…/cmd_vel` and it forwards one | `twist_mux` (priorities only, no states); every node writes `/cmd_vel` (they fight) | 1, 3 |
-| D3 | Gesture output | Words `forward` `back` `left` `right` `stop` on `/gesture/command`, plus `none` (no hand: zero speed in `DRIVE`, heartbeat only elsewhere). `stop` is a deliberate gesture | `Twist` speeds (tuning spread across lanes); `stop` doubling as "no hand" (freezes avoidance) | 2 |
+| D3 | Gesture output | Words `forward` `back` `left` `right` `stop` on `/gesture/command`, plus `none` (no hand, or an open hand in the centre zone: zero speed in `DRIVE`, heartbeat only elsewhere). `stop` is a deliberate gesture | `Twist` speeds (tuning spread across lanes); `stop` doubling as "no hand" (freezes avoidance) | 2 |
 | D4 | Laptop link drops | Gesture node publishes at 10 Hz; nothing for 0.5 s → robot stops | Keep the last command (drives blind) | 2 |
 | D5 | Obstacle topics | Lane 3's `obstacle_avoidance` topics, but `/obstacle/detected` is published at a fixed 10 Hz, starts `true` until the first valid reading, and 1 s of silence counts as blocked | Rename to a Lane 1 scheme; publish only on change (silence looks like a clear path) | 3 |
 | D6 | Avoidance reports `failed` | Stop, play a clip, hand driving back to the operator | Send a Telegram alert | 3 |

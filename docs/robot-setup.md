@@ -34,7 +34,7 @@ export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp   # sudo apt install ros-humble-rmw
 - [ ] Same test the other way round
 - [ ] If discovery fails on this phone (some iPhones block multicast): try
       another phone, or fall back to Fast DDS with a discovery server
-- [ ] Gesture laptop OS (needs ROS 2 Humble: Ubuntu 22.04, WSL2, or Docker): `____`
+- [ ] Gesture laptop OS (needs ROS 2 Humble: Ubuntu 22.04, WSL2, or Docker): `macOS on purin's M1 MacBook, ROS 2 Humble from RoboStack (tools/mac_ros_setup.sh)`
 
 ## 3. Hardware
 
