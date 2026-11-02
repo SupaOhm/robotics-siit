@@ -5,10 +5,10 @@ the obstacle. The robot turns until the corridor ahead has been clear for
 ``clear_time`` seconds, then reports DONE so the state machine can hand
 driving back to the operator. Two bases, picked by ``drive_type``:
 
-- ``Avoider`` (diff): turns in place.
-- ``AckermannAvoider`` (ackermann, the A1): can't turn in place, so it
-  backs up on full lock and drives forward on full lock, like a three-point
-  turn.
+- ``Avoider`` (diff, the A1's mecanum wheels): turns in place.
+- ``AckermannAvoider`` (ackermann, a car-like base): can't turn in place, so
+  it backs up on full lock and drives forward on full lock, like a
+  three-point turn.
 
 Both never turn less than ``min_turn`` (so the robot does not stop while the
 obstacle is still at the edge of the sensor) or more than ``max_turn``: past
@@ -166,7 +166,7 @@ class Avoider:
 
 
 class AckermannAvoider:
-    """Three-point turn for a car-like base (the A1 can't turn in place).
+    """Three-point turn for a car-like base that can't turn in place.
 
     BACKING: reverse on full lock, so the nose swings toward ``direction``.
     It ends after ``back_turn`` of heading, ``max_reverse`` of distance, or

@@ -23,14 +23,16 @@ avoidance_node:
 
     # How AVOID turns away (D6, D13). The state machine cancels AVOID after
     # 10 s with no result, so keep a full turn well under that.
-    drive_type: "ackermann"     # ackermann: the A1, can't turn in place (backs up, then arcs)
-                                # diff: turns in place
+    drive_type: "diff"          # diff: turns in place (the A1, mecanum wheels)
+                                # ackermann: a car-like base that can't turn in place
+                                # (backs up, then arcs)
     imu_topic: "/imu/data_raw"  # gyro for the turned angle; "" = estimate it from the commands
 
-    # ackermann only
+    # ackermann only. 270 deg at full lock takes about 8.7 s, close to the
+    # 10 s timeout: set max_turn_deg to 180 with this mode.
     avoid_speed: 0.15           # m/s while backing and arcing
-    wheelbase: 0.16             # m, front to rear axle: measure on the A1
-    max_steer_deg: 30.0         # full lock: measure on the A1
+    wheelbase: 0.16             # m, front to rear axle: measure on the base
+    max_steer_deg: 30.0         # full lock: measure on the base
     back_turn_deg: 30.0         # each backing phase stops after this much turn,
     max_reverse: 0.25           # or after this far back (m),
     rear_clear: 0.20            # or when something is this close behind (m, LiDAR only)

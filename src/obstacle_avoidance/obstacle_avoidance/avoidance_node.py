@@ -55,7 +55,7 @@ class AvoidanceNode(Node):
         p("stop_distance", 0.30)
         p("clear_distance", 0.40)
         p("sensor_timeout", 0.5)
-        p("drive_type", "ackermann")  # ackermann | diff
+        p("drive_type", "diff")  # diff | ackermann
         p("imu_topic", "/imu/data_raw")  # "" = estimate the turn from the commands
         p("avoid_speed", 0.15)
         p("wheelbase", 0.16)

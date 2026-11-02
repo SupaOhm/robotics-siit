@@ -17,7 +17,7 @@ stands in for Lane 1's state machine: drive, stop when an obstacle appears
 
 --drive picks the base (default: drive_type in avoidance.yaml):
   diff       the lab robot's own wheels; it turns in place
-  ackermann  the script moves the robot as a car-like A1 would (bicycle model,
+  ackermann  the script moves the robot as a car-like base would (bicycle model,
              full lock max_steer_deg, no turning at zero speed). The wheels
              don't steer on screen. The Hokuyo sees 240 deg, so the rear is
              blind and backing stops on distance or heading only
