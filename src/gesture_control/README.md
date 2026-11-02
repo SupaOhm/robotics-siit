@@ -43,8 +43,10 @@ right for `right`. Angles are measured around the frame centre: 0 = above,
 
 Guards against flicker and accidents:
 
-- A new word must be seen `confirm_frames` (3) frames in a row before it is
-  published.
+- `stop` (a fist) is published on its first frame. Stopping never waits, so
+  a fist that MediaPipe keeps losing still stops the robot.
+- Any other new word must be seen `confirm_frames` (3) frames in a row before
+  it is published.
 - `back` needs `back_confirm_frames` (6), because holding `back` for 1 s is
   the operator override and the **Resume** gesture (D11).
 - Near a sector border or the deadzone edge, the previous word sticks

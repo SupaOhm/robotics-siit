@@ -43,11 +43,42 @@ def test_back_interrupted_restarts_count():
     assert "back" not in out
 
 
-def test_stop_confirms_with_normal_count():
+def test_stop_takes_over_on_first_frame():
     s = WordSmoother(confirm_frames=3)
     feed(s, ["forward"] * 3)
-    out, _ = feed(s, ["stop"] * 3, t0=1.0)
-    assert out == ["forward", "forward", "stop"]
+    out, _ = feed(s, ["stop"], t0=1.0)
+    assert out == ["stop"]
+
+
+@pytest.mark.parametrize("pattern", [
+    ["stop", "stop", None],      # fist lost every third frame (PR #14 review)
+    ["stop", "stop", "right"],   # fist misread every third frame
+    ["stop", None, None],
+    ["stop", "forward", "forward"],
+])
+def test_flickering_fist_stops_and_stays_stopped(pattern):
+    """After forward, a fist that MediaPipe keeps losing must still stop the
+    robot, and the published word must stay stop, fed through LatestWord as
+    the node does, for 3 s at 30 fps."""
+    from gesture_control.command_source import LatestWord
+    s, latest = WordSmoother(confirm_frames=3), LatestWord()
+    out, t = feed(s, ["forward"] * 3)
+    assert out[-1] == "forward"
+    published = []
+    for i in range(90):
+        word = s.update(pattern[i % len(pattern)], t)
+        latest.set(word, t)
+        published.append(latest.get(t))
+        t += DT
+    assert published[0] == "stop"
+    assert set(published) == {"stop"}
+
+
+def test_moving_again_after_stop_needs_confirm_frames():
+    s = WordSmoother(confirm_frames=3)
+    feed(s, ["stop"])
+    out, _ = feed(s, ["forward"] * 3, t0=1.0)
+    assert out == ["stop", "stop", "forward"]
 
 
 def test_dropout_holds_then_none():

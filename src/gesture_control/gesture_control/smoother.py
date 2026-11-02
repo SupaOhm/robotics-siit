@@ -1,6 +1,9 @@
 """Per-frame raw word -> stable word. Plain Python; time is passed in.
 
-- A new word must be seen ``confirm_frames`` frames in a row before it
+- ``stop`` (a fist) takes over on its first frame. Stopping must never wait
+  for confirmation: a fist that MediaPipe loses every few frames would
+  otherwise never break a run of ``forward``.
+- Any other new word must be seen ``confirm_frames`` frames in a row before it
   replaces the current one. ``back`` needs ``back_confirm_frames``, because
   holding ``back`` for 1 s is the operator override and Resume (D11).
 - No hand (raw ``None``) holds the current word for ``dropout_hold_s``, so a
@@ -54,6 +57,10 @@ class WordSmoother:
         if raw not in WORDS:
             raise ValueError("unknown word: %r" % raw)
         self._last_hand = now
+        if raw == "stop":
+            self.current = "stop"
+            self._candidate, self._count = None, 0
+            return self.current
         if raw == self.current:
             self._candidate, self._count = None, 0
             return self.current
