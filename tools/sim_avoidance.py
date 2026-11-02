@@ -11,16 +11,10 @@ customData.lidarScan buffer. The scene isn't in this repo; pass its path.
 The script reopens the scene, removes the lab's own /body/online controller,
 copies Obstacle[0] as a wall ahead of the robot and runs the simulation step
 by step. ZMQ stands in for ROS: the script reads the LiDAR, runs this
-package's filter, detector and avoider, and moves the robot. A small loop
-stands in for Lane 1's state machine: drive, stop when an obstacle appears
-(D28), pause like ANNOUNCE, AVOID, drive again.
-
---drive picks the base (default: drive_type in avoidance.yaml):
-  diff       the lab robot's own wheels; it turns in place
-  ackermann  the script moves the robot as a car-like base would (bicycle model,
-             full lock max_steer_deg, no turning at zero speed). The wheels
-             don't steer on screen. The Hokuyo sees 240 deg, so the rear is
-             blind and backing stops on distance or heading only
+package's filter, detector and avoider, and sets the wheel speeds. The
+robot's heading in the sim stands in for the IMU. A small loop stands in
+for Lane 1's state machine: drive, stop when an obstacle appears (D28),
+pause like ANNOUNCE, AVOID, drive again.
 
 Nothing is saved: don't save over the lab scene in CoppeliaSim afterwards.
 """
@@ -35,10 +29,10 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src" / "obstacle_avoidance"))
 
-from obstacle_avoidance.avoider import EventType, make_avoider
+from obstacle_avoidance.avoider import Avoider, EventType
 from obstacle_avoidance.detector import ObstacleDetector
 from obstacle_avoidance.range_filter import RangeFilter
-from obstacle_avoidance.scan import corridor_min, front_left_right
+from obstacle_avoidance.scan import front_left_right
 
 WHEEL_RADIUS = 0.05   # m, Lab 03/04 robot (Lab 04 main.py)
 TRACK = 0.30          # m, effective wheel track (Lab 04 main.py)
@@ -68,7 +62,6 @@ def wrap(angle):
 
 def run(sim, args, log):
     P = load_params(args.config)
-    P["drive_type"] = args.drive or P["drive_type"]
 
     sim.loadScene(str(Path(args.scene).expanduser().resolve()))
     sim.removeObjects([sim.getObject("/body/online")])
@@ -84,56 +77,36 @@ def run(sim, args, log):
     sim.setObjectPosition(wall, sim.handle_world, [bp[0], bp[1] - args.wall_ahead, wp[2]])
     half_len = sim.getShapeBB(body)[0][1] / 2
     log("wall %.1f m ahead; LiDAR to front of robot %.2f m" % (args.wall_ahead, half_len))
-    log("drive %s, corridor +-%.2f m, stop %.2f m, clear %.2f m"
-        % (P["drive_type"], P["corridor_half_width"], P["stop_distance"], P["clear_distance"]))
+    log("corridor +-%.2f m, stop %.2f m, clear %.2f m, turn %.1f rad/s"
+        % (P["corridor_half_width"], P["stop_distance"], P["clear_distance"], P["turn_speed"]))
+
+    def wheels(v, w):
+        sim.setJointTargetVelocity(left_motor, (v - w * TRACK / 2) / WHEEL_RADIUS)
+        sim.setJointTargetVelocity(right_motor, (v + w * TRACK / 2) / WHEEL_RADIUS)
 
     def heading():
         m = sim.getObjectMatrix(body, sim.handle_world)
         return math.atan2(-m[5], -m[1])  # the robot drives along its body -Y
 
-    ackermann = P["drive_type"] == "ackermann"
-    if ackermann:
-        sim.setModelProperty(body, sim.modelproperty_not_dynamic)
-        max_yaw_curvature = math.tan(math.radians(P["max_steer_deg"])) / P["wheelbase"]
-        pose = list(sim.getObjectPosition(body, sim.handle_world)) + [heading()]
-        tilt = sim.getObjectOrientation(body, sim.handle_world)[:2]
-
-    def move(v, w, dt):
-        """Send (linear, angular) like a Twist on /cmd_vel."""
-        if not ackermann:
-            sim.setJointTargetVelocity(left_motor, (v - w * TRACK / 2) / WHEEL_RADIUS)
-            sim.setJointTargetVelocity(right_motor, (v + w * TRACK / 2) / WHEEL_RADIUS)
-            return
-        limit = abs(v) * max_yaw_curvature  # a car can't yaw faster than full lock allows
-        w = max(-limit, min(limit, w))
-        pose[0] += v * math.cos(pose[3]) * dt
-        pose[1] += v * math.sin(pose[3]) * dt
-        pose[3] += w * dt
-        sim.setObjectPosition(body, sim.handle_world, pose[:3])
-        sim.setObjectOrientation(body, sim.handle_world, tilt + [pose[3] + math.pi / 2])
-
     def make_filter():
         return RangeFilter(P["filter_window"], P["min_range"], P["max_range"])
-    front_f, left_f, right_f, rear_f = make_filter(), make_filter(), make_filter(), make_filter()
+    front_f, left_f, right_f = make_filter(), make_filter(), make_filter()
     detector = ObstacleDetector(P["stop_distance"], P["clear_distance"])
-    avoider = make_avoider(P.__getitem__)
+    avoider = Avoider(P["clear_distance"], P["turn_speed"], math.radians(P["min_turn_deg"]),
+                      math.radians(P["max_turn_deg"]), P["clear_time"], int(P["default_direction"]))
     side = lambda f: math.inf if f.value is None else f.value
 
     sim.setStepping(True)
     sim.startSimulation()
     state, was_blocked, last_scan = "DRIVE", False, None
-    t, t_stopped, yaw_start, avoids, phase, closest_seen = 0.0, 0.0, 0.0, 0, None, math.inf
-    command = (0.0, 0.0)
-    front_raw = rear_raw = math.inf  # latest valid scan, no filter delay: AVOID reacts to it
+    t, t_stopped, yaw_start, avoids, closest_seen = 0.0, 0.0, 0.0, 0, math.inf
     wall_start = time.monotonic()
     try:
         while t < args.seconds:
-            t_prev = t
             sim.step()
             t = sim.getSimulationTime()
             if args.realtime:
                 time.sleep(max(0.0, t - (time.monotonic() - wall_start)))
-            move(*command, t - t_prev)
             data = sim.getBufferProperty(hokuyo, "customData.lidarScan", {"noError": True})
             scan = sim.unpackTable(data) if data else None
             if scan and scan["timestamp"] != last_scan:
@@ -142,50 +115,40 @@ def run(sim, args, log):
                     scan["ranges"], scan["angleMin"], scan["angleIncrement"],
                     math.radians(P["front_angle_deg"]), P["corridor_half_width"],
                     math.radians(P["side_half_width_deg"]), max(scan["rangeMin"], P["min_range"]))
-                b = corridor_min(
-                    scan["ranges"], scan["angleMin"], scan["angleIncrement"], P["corridor_half_width"],
-                    math.radians(P["front_angle_deg"]) + math.pi, max(scan["rangeMin"], P["min_range"]))
                 front_f.update(f)
                 left_f.update(l)
                 right_f.update(r)
-                rear_f.update(b)
-                front_raw = f if front_f.valid(f) else front_raw
-                rear_raw = b if rear_f.valid(b) else rear_raw
                 hits = [x for x in scan["ranges"] if x >= scan["rangeMin"]]
                 closest_seen = min([closest_seen] + hits)
                 if front_f.value is not None:
                     detector.update(front_f.value)
             front = front_f.value
             if front is None:
-                command = (0.0, 0.0)
+                wheels(0, 0)
                 continue
 
             if state == "DRIVE":
                 if detector.blocked and not was_blocked:
-                    command = (0.0, 0.0)
+                    wheels(0, 0)
                     state, t_stopped = "STOPPED", t
                     log("t=%5.2f  obstacle at %.3f m, stop" % (t, front))
                 else:
-                    command = (0.0 if detector.blocked else DRIVE_SPEED, 0.0)
+                    wheels(0 if detector.blocked else DRIVE_SPEED, 0)
             elif state == "STOPPED":
-                command = (0.0, 0.0)
                 if t - t_stopped >= ANNOUNCE_PAUSE:
                     ev = avoider.start(t, side(left_f), side(right_f), heading())[0]
-                    yaw_start, state, phase = heading(), "AVOID", None
+                    yaw_start, state = heading(), "AVOID"
                     log("t=%5.2f  stopped at %.3f m (gap at the front %.3f m), left %.2f right %.2f, turn %s"
                         % (t, front, front - half_len, side(left_f), side(right_f),
                            "left" if ev.direction > 0 else "right"))
             elif state == "AVOID":
-                events = avoider.tick(t, min(front, front_raw), min(side(rear_f), rear_raw), heading())
-                command = avoider.command
-                if getattr(avoider, "phase", None) != phase and avoider.active:
-                    phase = avoider.phase
-                    log("t=%5.2f    %s: front %.2f m, turned %.0f deg"
-                        % (t, phase, front, math.degrees(abs(wrap(heading() - yaw_start)))))
+                events = avoider.tick(t, front, heading())
+                wheels(0, avoider.angular_velocity)
                 for ev in events:
                     avoids += 1
-                    log("t=%5.2f  %s: turned %.0f deg, front %.2f m"
-                        % (t, ev.type.value, math.degrees(abs(wrap(heading() - yaw_start))), front))
+                    log("t=%5.2f  %s: turned %.0f deg (avoider counted %.0f deg), front %.2f m"
+                        % (t, ev.type.value, math.degrees(abs(wrap(heading() - yaw_start))),
+                           math.degrees(avoider.turned_angle), front))
                     state = "DRIVE" if ev.type == EventType.DONE else "FAILED"
             if state == "FAILED":
                 break
@@ -194,8 +157,7 @@ def run(sim, args, log):
         log("t=%5.2f  end: %d avoids, robot at (%.2f, %.2f), state %s" % (t, avoids, p[0], p[1], state))
         log("closest LiDAR reading all run: %.3f m (LiDAR to front of robot %.2f m)" % (closest_seen, half_len))
     finally:
-        if not ackermann:
-            move(0.0, 0.0, 0.0)
+        wheels(0, 0)
         sim.stopSimulation()
         sim.setStepping(False)
 
@@ -205,7 +167,6 @@ def main():
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("scene", help="path to Lab3_scene.ttt, on the machine running CoppeliaSim")
     parser.add_argument("--config", default=str(REPO / "src/obstacle_avoidance/config/avoidance.yaml"))
-    parser.add_argument("--drive", choices=("ackermann", "diff"), help="default: drive_type in the config")
     parser.add_argument("--seconds", type=float, default=45.0, help="simulated time to run")
     parser.add_argument("--realtime", action="store_true", help="run at real speed, to watch it")
     parser.add_argument("--wall-ahead", type=float, default=1.0, help="m from the robot to the wall")

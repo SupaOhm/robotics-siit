@@ -1,25 +1,19 @@
 """Turn-away-and-resume logic (ROS-independent).
 
 The main state machine starts a turn after the robot has stopped and named
-the obstacle. The robot turns until the corridor ahead has been clear for
-``clear_time`` seconds, then reports DONE so the state machine can hand
-driving back to the operator. Two bases, picked by ``drive_type``:
+the obstacle. The A1 has mecanum wheels, so the robot turns in place until
+the corridor ahead has been clear for ``clear_time`` seconds, then reports
+DONE so the state machine can hand driving back to the operator.
 
-- ``Avoider`` (diff, the A1's mecanum wheels): turns in place.
-- ``AckermannAvoider`` (ackermann, a car-like base): can't turn in place, so
-  it backs up on full lock and drives forward on full lock, like a
-  three-point turn.
-
-Both never turn less than ``min_turn`` (so the robot does not stop while the
-obstacle is still at the edge of the sensor) or more than ``max_turn``: past
-that the robot is boxed in and reports FAILED. ``command`` is the
-(linear m/s, angular rad/s) to send while ``active``.
+The turn is never shorter than ``min_turn`` (so the robot does not stop
+while the obstacle is still at the edge of the sensor) and never longer than
+``max_turn``: past that the robot is boxed in and reports FAILED.
 """
 
 import math
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, List, Optional, Tuple
+from typing import List, Optional
 
 
 class EventType(str, Enum):
@@ -37,24 +31,6 @@ class Event:
 
 def _wrap(angle: float) -> float:
     return math.atan2(math.sin(angle), math.cos(angle))
-
-
-def _yaw_change(yaw: Optional[float], last_yaw: Optional[float], angular: float,
-                dt: float) -> float:
-    """The measured yaw change when there are two IMU readings, else the
-    commanded rate x time."""
-    if yaw is not None and last_yaw is not None:
-        return _wrap(yaw - last_yaw)
-    return angular * dt
-
-
-def choose_direction(left: float, right: float, default: int) -> int:
-    """Turn toward the side with more room; ties go to the default."""
-    if left > right:
-        return 1
-    if right > left:
-        return -1
-    return default
 
 
 class Avoider:
@@ -102,16 +78,17 @@ class Avoider:
         """Command to send now (rad/s), 0 when not turning."""
         return self.direction * self.turn_speed if self.active else 0.0
 
-    @property
-    def command(self) -> Tuple[float, float]:
-        return 0.0, self.angular_velocity
-
     def estimated_turn(self, t: float) -> float:
         """Speed x time since start (rad)."""
         return (t - self._start_t) * self.turn_speed if self.active else 0.0
 
     def choose_direction(self, left: float, right: float) -> int:
-        return choose_direction(left, right, self.default_direction)
+        """Turn toward the side with more room; ties go to the default."""
+        if left > right:
+            return 1
+        if right > left:
+            return -1
+        return self.default_direction
 
     def start(self, t: float, left: float = math.inf, right: float = math.inf,
               yaw: Optional[float] = None) -> List[Event]:
@@ -138,15 +115,16 @@ class Avoider:
         """Stop the turn as FAILED, e.g. the distance sensor went silent."""
         return self._end(EventType.FAILED) if self.active else []
 
-    def tick(self, t: float, front: float, rear: float = math.inf,
-             yaw: Optional[float] = None) -> List[Event]:
+    def tick(self, t: float, front: float, yaw: Optional[float] = None) -> List[Event]:
         """Call at the control rate with the latest filtered front distance
-        and, if there is an IMU, the current yaw (rad). ``rear`` is only used
-        by AckermannAvoider."""
+        and, if there is an IMU, the current yaw (rad)."""
         if not self.active:
             return []
-        self.turned_angle += self.direction * _yaw_change(
-            yaw, self._yaw, self.angular_velocity, t - self._t)
+        if yaw is not None and self._yaw is not None:
+            gained = _wrap(yaw - self._yaw)
+        else:
+            gained = self.angular_velocity * (t - self._t)
+        self.turned_angle += self.direction * gained
         if yaw is not None:
             self._yaw = yaw
         self._t = t
@@ -163,182 +141,3 @@ class Avoider:
         if self.turned_angle >= self.max_turn or self.estimated_turn(t) >= self.max_turn:
             return self._end(EventType.FAILED)
         return []
-
-
-class AckermannAvoider:
-    """Three-point turn for a car-like base that can't turn in place.
-
-    BACKING: reverse on full lock, so the nose swings toward ``direction``.
-    It ends after ``back_turn`` of heading, ``max_reverse`` of distance, or
-    when the rear closes to ``rear_clear``.
-    ARC: drive forward on full lock the same way round. DONE once the
-    corridor ahead is clear for ``clear_time`` and the robot has turned at
-    least ``min_turn``. If the front closes to ``arc_min_front`` it backs up
-    again; after ``max_cycles`` backing phases it reports FAILED.
-
-    The turned angle comes from the measured yaw (IMU) passed to tick(), or
-    from integrating the commands when there is none.
-    """
-
-    BACKING = "backing"
-    ARC = "arc"
-
-    def __init__(
-        self,
-        clear_distance: float = 0.40,
-        speed: float = 0.15,
-        wheelbase: float = 0.16,
-        max_steer: float = math.radians(30),
-        back_turn: float = math.radians(30),
-        max_reverse: float = 0.25,
-        rear_clear: float = 0.20,
-        arc_min_front: float = 0.20,
-        min_turn: float = math.radians(30),
-        max_turn: float = math.radians(270),
-        clear_time: float = 0.3,
-        max_cycles: int = 3,
-        default_direction: int = 1,
-    ):
-        if speed <= 0 or wheelbase <= 0:
-            raise ValueError("speed and wheelbase must be > 0")
-        if not 0 < max_steer < math.pi / 2:
-            raise ValueError("max_steer must be between 0 and 90 degrees")
-        if not 0 <= min_turn < max_turn:
-            raise ValueError("need 0 <= min_turn < max_turn")
-        if max_cycles < 1:
-            raise ValueError("max_cycles must be >= 1")
-        if default_direction not in (1, -1):
-            raise ValueError("default_direction must be 1 (left) or -1 (right)")
-        self.clear_distance = clear_distance
-        self.speed = speed
-        self.yaw_rate = speed * math.tan(max_steer) / wheelbase  # at full lock
-        self.back_turn = back_turn
-        self.max_reverse = max_reverse
-        self.rear_clear = rear_clear
-        self.arc_min_front = arc_min_front
-        self.min_turn = min_turn
-        self.max_turn = max_turn
-        self.clear_time = clear_time
-        self.max_cycles = max_cycles
-        self.default_direction = default_direction
-
-        self.active = False
-        self.direction = 0
-        self.phase: Optional[str] = None
-        self.cycles = 0
-        self.turned_angle = 0.0
-        self._t = 0.0
-        self._yaw: Optional[float] = None
-        self._phase_turn = 0.0
-        self._phase_dist = 0.0
-        self._clear_since: Optional[float] = None
-
-    @property
-    def command(self) -> Tuple[float, float]:
-        if not self.active:
-            return 0.0, 0.0
-        linear = -self.speed if self.phase == self.BACKING else self.speed
-        return linear, self.direction * self.yaw_rate
-
-    def choose_direction(self, left: float, right: float) -> int:
-        return choose_direction(left, right, self.default_direction)
-
-    def start(self, t: float, left: float = math.inf, right: float = math.inf,
-              yaw: Optional[float] = None) -> List[Event]:
-        self.active = True
-        self.direction = self.choose_direction(left, right)
-        self.cycles = 0
-        self.turned_angle = 0.0
-        self._t = t
-        self._yaw = yaw
-        self._enter(self.BACKING)
-        return [Event(EventType.TURNING, self.direction)]
-
-    def _enter(self, phase: str) -> None:
-        if phase == self.BACKING:
-            self.cycles += 1
-        self.phase = phase
-        self._phase_turn = 0.0
-        self._phase_dist = 0.0
-        self._clear_since = None
-
-    def _end(self, event_type: EventType) -> List[Event]:
-        event = Event(event_type, self.direction)
-        self.active = False
-        self.direction = 0
-        self.phase = None
-        return [event]
-
-    def cancel(self) -> List[Event]:
-        return self._end(EventType.CANCELLED) if self.active else []
-
-    def fail(self) -> List[Event]:
-        return self._end(EventType.FAILED) if self.active else []
-
-    def _advance(self, t: float, yaw: Optional[float]) -> None:
-        dt = t - self._t
-        linear, angular = self.command
-        gained = self.direction * _yaw_change(yaw, self._yaw, angular, dt)
-        if yaw is not None:
-            self._yaw = yaw
-        self.turned_angle += gained
-        self._phase_turn += gained
-        self._phase_dist += abs(linear) * dt
-        self._t = t
-
-    def tick(self, t: float, front: float, rear: float = math.inf,
-             yaw: Optional[float] = None) -> List[Event]:
-        """Call at the control rate with the filtered front and rear corridor
-        distances and, if there is an IMU, the current yaw (rad)."""
-        if not self.active:
-            return []
-        self._advance(t, yaw)
-
-        if self.phase == self.BACKING:
-            if (self._phase_turn >= self.back_turn or self._phase_dist >= self.max_reverse
-                    or rear < self.rear_clear):
-                self._enter(self.ARC)
-            return []
-
-        if front >= self.clear_distance:
-            if self._clear_since is None:
-                self._clear_since = t
-        else:
-            self._clear_since = None
-        if (self.turned_angle >= self.min_turn and self._clear_since is not None
-                and t - self._clear_since >= self.clear_time):
-            return self._end(EventType.DONE)
-        if self.turned_angle >= self.max_turn:
-            return self._end(EventType.FAILED)
-        if front < self.arc_min_front:
-            if self.cycles >= self.max_cycles:
-                return self._end(EventType.FAILED)
-            self._enter(self.BACKING)
-        return []
-
-
-def make_avoider(param: Callable[[str], object]):
-    """The avoider that ``drive_type`` names. ``param(name)`` returns a value
-    from config/avoidance.yaml (the node and tools/sim_avoidance.py share this)."""
-    drive_type = param("drive_type")
-    common = dict(
-        clear_distance=float(param("clear_distance")),
-        min_turn=math.radians(float(param("min_turn_deg"))),
-        max_turn=math.radians(float(param("max_turn_deg"))),
-        clear_time=float(param("clear_time")),
-        default_direction=int(param("default_direction")),
-    )
-    if drive_type == "diff":
-        return Avoider(turn_speed=float(param("turn_speed")), **common)
-    if drive_type == "ackermann":
-        return AckermannAvoider(
-            speed=float(param("avoid_speed")),
-            wheelbase=float(param("wheelbase")),
-            max_steer=math.radians(float(param("max_steer_deg"))),
-            back_turn=math.radians(float(param("back_turn_deg"))),
-            max_reverse=float(param("max_reverse")),
-            rear_clear=float(param("rear_clear")),
-            arc_min_front=float(param("arc_min_front")),
-            max_cycles=int(param("max_cycles")),
-            **common)
-    raise ValueError("unknown drive_type: %s" % drive_type)
