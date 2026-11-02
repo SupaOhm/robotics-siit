@@ -64,14 +64,19 @@ def run(sim, args, log):
     P = load_params(args.config)
 
     sim.loadScene(str(Path(args.scene).expanduser().resolve()))
-    sim.removeObjects([sim.getObject("/body/online")])
+    # A scene saved after an earlier run has no /body/online and has a TestWall.
+    online = sim.getObject("/body/online", {"noError": True})
+    if online != -1:
+        sim.removeObjects([online])
     body = sim.getObject("/body")
     left_motor, right_motor = sim.getObject("/body/J1"), sim.getObject("/body/J2")
     hokuyo = sim.getObject("/body/Hokuyo")
 
     src = sim.getObject("/Obstacle[0]")
-    wall = sim.copyPasteObjects([src], 0)[0]
-    sim.setObjectAlias(wall, "TestWall")
+    wall = sim.getObject("/TestWall", {"noError": True})
+    if wall == -1:
+        wall = sim.copyPasteObjects([src], 0)[0]
+        sim.setObjectAlias(wall, "TestWall")
     bp = sim.getObjectPosition(body, sim.handle_world)
     wp = sim.getObjectPosition(src, sim.handle_world)
     sim.setObjectPosition(wall, sim.handle_world, [bp[0], bp[1] - args.wall_ahead, wp[2]])
@@ -96,9 +101,14 @@ def run(sim, args, log):
                       math.radians(P["max_turn_deg"]), P["clear_time"], int(P["default_direction"]))
     side = lambda f: math.inf if f.value is None else f.value
 
+    def read_scan():
+        data = sim.getBufferProperty(hokuyo, "customData.lidarScan", {"noError": True})
+        return sim.unpackTable(data) if data else None
+
+    saved = read_scan()  # a scene saved after a run keeps that run's last scan
     sim.setStepping(True)
     sim.startSimulation()
-    state, was_blocked, last_scan = "DRIVE", False, None
+    state, was_blocked, last_scan = "DRIVE", False, saved and saved["timestamp"]
     t, t_stopped, yaw_start, avoids, closest_seen = 0.0, 0.0, 0.0, 0, math.inf
     wall_start = time.monotonic()
     try:
@@ -107,8 +117,7 @@ def run(sim, args, log):
             t = sim.getSimulationTime()
             if args.realtime:
                 time.sleep(max(0.0, t - (time.monotonic() - wall_start)))
-            data = sim.getBufferProperty(hokuyo, "customData.lidarScan", {"noError": True})
-            scan = sim.unpackTable(data) if data else None
+            scan = read_scan()
             if scan and scan["timestamp"] != last_scan:
                 last_scan = scan["timestamp"]
                 f, l, r = front_left_right(
