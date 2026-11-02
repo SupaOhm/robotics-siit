@@ -71,7 +71,10 @@ def expected_from_name(name):
 
 def answer(boxes, settings):
     """What the robot would say for one frame's boxes."""
-    detections = [Detection(n, c, a) for n, c, a in boxes]
+    # The robot runs YOLO at the lower threshold, so it never sees weaker
+    # boxes. The JSON keeps them only so the thresholds can be lowered.
+    floor = min(settings["person"], settings["object"])
+    detections = [Detection(n, c, a) for n, c, a in boxes if c >= floor]
     result = classify("x", detections, settings["names"],
                       settings["person"], settings["object"])
     return result["label"] or result["kind"]
@@ -117,9 +120,15 @@ def photo_entries(session, boxes):
     for original in sorted((session / "originals").iterdir()):
         if original.suffix.lower() not in PHOTO_TYPES:
             continue
-        resized = resized_photo(original, session / "resized")
-        found = boxes.run(cv2.imread(str(resized)),
-                          session / "annotated" / resized.name)
+        try:
+            resized = resized_photo(original, session / "resized")
+            image = cv2.imread(str(resized))
+            if image is None:
+                raise ValueError("can't read %s" % resized)
+            found = boxes.run(image, session / "annotated" / resized.name)
+        except Exception as error:  # skip one bad photo, keep the rest
+            print("%s: skipped, %s" % (original.stem, error))
+            continue
         yield original.stem, {"boxes": found}
 
 
@@ -144,7 +153,10 @@ def to_bgr(msg, msgtype):
 
 
 def stop_time(commands):
-    """Time of the last change from moving to stopped, or None."""
+    """Time of the last change from moving to stopped.
+
+    None if the robot never moved, so any frame shows the stop position.
+    """
     stopped_at, moving = None, False
     for t, msg in commands:
         now_moving = any(abs(v) > 1e-3 for v in (
@@ -152,57 +164,64 @@ def stop_time(commands):
         if moving and not now_moving:
             stopped_at = t
         moving = now_moving
-    return None if moving else stopped_at
+    if moving:
+        raise ValueError("still moving when /cmd_vel ends: stop with the "
+                         "teleop stop key, not by letting go of the keys")
+    return stopped_at
 
 
 def recording_entries(session, boxes):
-    from rosbags.highlevel import AnyReader
     from rosbags.typesys import Stores, get_typestore
     typestore = get_typestore(Stores.ROS2_HUMBLE)
 
     for bag in sorted(p for p in (session / "recordings").iterdir()
                       if p.is_dir()):
-        with AnyReader([bag], default_typestore=typestore) as reader:
-            cameras = [c for c in reader.connections
-                       if c.msgtype in IMAGE_TYPES]
-            if len({c.topic for c in cameras}) != 1:
-                print("%s: skipped, expected one camera topic, found %s"
-                      % (bag.name, sorted({c.topic for c in cameras})))
-                continue
-            drive = [c for c in reader.connections if c.topic == "/cmd_vel"]
-            # An empty connection list would read every topic, not none.
-            commands = [(t, reader.deserialize(raw, c.msgtype))
-                        for c, t, raw in reader.messages(connections=drive)
-                        ] if drive else []
-            start = stop_time(commands)
-            note = None
-            if start is None:
-                note = "no stop in /cmd_vel, sampled from the first frame"
-
-            frames, next_t = [], start or 0
-            for c, t, raw in reader.messages(connections=cameras):
-                if t < next_t:
-                    continue
-                if start is None:
-                    start = t
-                name = "%02d_%+.1fs.jpg" % (len(frames), (t - start) / 1e9)
-                frames.append(boxes.run(
-                    to_bgr(reader.deserialize(raw, c.msgtype), c.msgtype),
-                    session / "annotated" / bag.name / name))
-                next_t = t + int(FRAME_STEP * 1e9)
-        if note:
-            print("%s: %s" % (bag.name, note))
-        if not frames:
-            print("%s: skipped, no camera frames after the stop" % bag.name)
+        try:  # skip one bad recording, keep the rest
+            frames = read_recording(bag, typestore, session, boxes)
+        except Exception as error:
+            print("%s: skipped, %s" % (bag.name, error))
             continue
         yield bag.name, {"frames": frames}
 
 
+def read_recording(bag, typestore, session, boxes):
+    """Boxes for frames from the stop, one every FRAME_STEP seconds."""
+    from rosbags.highlevel import AnyReader
+    with AnyReader([bag], default_typestore=typestore) as reader:
+        cameras = [c for c in reader.connections if c.msgtype in IMAGE_TYPES]
+        topics = sorted({c.topic for c in cameras})
+        if len(topics) != 1:
+            raise ValueError("expected one camera topic, found %s" % topics)
+        drive = [c for c in reader.connections if c.topic == "/cmd_vel"]
+        # An empty connection list would read every topic, not none.
+        commands = [(t, reader.deserialize(raw, c.msgtype))
+                    for c, t, raw in reader.messages(connections=drive)
+                    ] if drive else []
+        start = stop_time(commands)
+        if start is None:
+            print("%s: robot never moved, sampled from the first frame"
+                  % bag.name)
+
+        frames, next_t = [], start or 0
+        for c, t, raw in reader.messages(connections=cameras):
+            if t < next_t:
+                continue
+            if start is None:
+                start = t
+            name = "%02d_%+.1fs.jpg" % (len(frames), (t - start) / 1e9)
+            frames.append(boxes.run(
+                to_bgr(reader.deserialize(raw, c.msgtype), c.msgtype),
+                session / "annotated" / bag.name / name))
+            next_t = t + int(FRAME_STEP * 1e9)
+    if not frames:
+        raise ValueError("no camera frames after the stop")
+    return frames
+
+
 # ---- main ---------------------------------------------------------------
 
-def merge(json_path, key, found):
+def merge(json_path, entries, key, found):
     """Update boxes of known entries, add new ones that have an expected answer."""
-    entries = json.loads(json_path.read_text()) if json_path.exists() else []
     by_name = {e[key]: e for e in entries}
     for name, data in found:
         if name in by_name:
@@ -246,15 +265,22 @@ def main():
     parser.add_argument("--model", default="~/models/yolo11n_ncnn_model")
     args = parser.parse_args()
 
-    settings = read_settings()
-    boxes = Boxes(os.path.expanduser(args.model), settings["image_size"])
     if (args.session / "originals").is_dir():
-        key, found = "photo", photo_entries(args.session, boxes)
+        key, read = "photo", photo_entries
     elif (args.session / "recordings").is_dir():
-        key, found = "bag", recording_entries(args.session, boxes)
+        key, read = "bag", recording_entries
     else:
         sys.exit("%s has no originals/ or recordings/ folder" % args.session)
-    report(merge(args.json, key, list(found)), key, settings)
+    # Check the JSON before YOLO runs, so a wrong file loses no work.
+    entries = json.loads(args.json.read_text()) if args.json.exists() else []
+    if any(key not in e for e in entries):
+        sys.exit("%s isn't a %s file: photos go in floor_photos.json, "
+                 "recordings in robot_frames.json" % (args.json, key))
+
+    settings = read_settings()
+    boxes = Boxes(os.path.expanduser(args.model), settings["image_size"])
+    found = list(read(args.session, boxes))
+    report(merge(args.json, entries, key, found), key, settings)
 
 
 if __name__ == "__main__":

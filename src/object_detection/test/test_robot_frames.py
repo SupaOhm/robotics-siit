@@ -36,7 +36,11 @@ with open(os.path.join(HERE, "robot_frames.json")) as f:
 
 
 def answer(boxes):
-    detections = [Detection(name, conf, area) for name, conf, area in boxes]
+    # The robot runs YOLO at the lower threshold, so it never sees weaker
+    # boxes. The JSON keeps them only so the thresholds can be lowered.
+    floor = min(PERSON_THRESHOLD, OBJECT_THRESHOLD)
+    detections = [Detection(name, conf, area)
+                  for name, conf, area in boxes if conf >= floor]
     result = classify("x", detections, NAMES, PERSON_THRESHOLD,
                       OBJECT_THRESHOLD)
     return result["label"] or result["kind"]
