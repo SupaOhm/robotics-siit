@@ -1,0 +1,3 @@
+[submodule "external/mini_project_arduino"]
+	path = external/mini_project_arduino
+	url = https://github.com/toonzzzrock/mini_project_arduino.git
