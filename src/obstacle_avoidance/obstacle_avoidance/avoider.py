@@ -39,6 +39,15 @@ def _wrap(angle: float) -> float:
     return math.atan2(math.sin(angle), math.cos(angle))
 
 
+def _yaw_change(yaw: Optional[float], last_yaw: Optional[float], angular: float,
+                dt: float) -> float:
+    """The measured yaw change when there are two IMU readings, else the
+    commanded rate x time."""
+    if yaw is not None and last_yaw is not None:
+        return _wrap(yaw - last_yaw)
+    return angular * dt
+
+
 def choose_direction(left: float, right: float, default: int) -> int:
     """Turn toward the side with more room; ties go to the default."""
     if left > right:
@@ -49,8 +58,14 @@ def choose_direction(left: float, right: float, default: int) -> int:
 
 
 class Avoider:
-    """Turns in place. There is no odometry, so the turned angle is
-    estimated as speed x time."""
+    """Turns in place. The turned angle comes from the measured yaw (IMU)
+    passed to tick(), or from speed x time when there is none. Mecanum wheels
+    slip when turning in place, so speed x time can run ahead of the real
+    turn.
+
+    Speed x time still caps the turn: once it reaches ``max_turn`` the turn
+    FAILS whatever the IMU says, so a robot that doesn't turn (stuck, or a
+    base that can't turn in place) gives up after max_turn / turn_speed."""
 
     def __init__(
         self,
@@ -76,7 +91,10 @@ class Avoider:
 
         self.active = False
         self.direction = 0
+        self.turned_angle = 0.0
         self._start_t = 0.0
+        self._t = 0.0
+        self._yaw: Optional[float] = None
         self._clear_since: Optional[float] = None
 
     @property
@@ -88,7 +106,8 @@ class Avoider:
     def command(self) -> Tuple[float, float]:
         return 0.0, self.angular_velocity
 
-    def turned(self, t: float) -> float:
+    def estimated_turn(self, t: float) -> float:
+        """Speed x time since start (rad)."""
         return (t - self._start_t) * self.turn_speed if self.active else 0.0
 
     def choose_direction(self, left: float, right: float) -> int:
@@ -100,7 +119,9 @@ class Avoider:
         inf and the robot turns ``default_direction``."""
         self.active = True
         self.direction = self.choose_direction(left, right)
-        self._start_t = t
+        self.turned_angle = 0.0
+        self._start_t = self._t = t
+        self._yaw = yaw
         self._clear_since = None
         return [Event(EventType.TURNING, self.direction)]
 
@@ -119,21 +140,27 @@ class Avoider:
 
     def tick(self, t: float, front: float, rear: float = math.inf,
              yaw: Optional[float] = None) -> List[Event]:
-        """Call at the control rate with the latest filtered front distance.
-        ``rear`` and ``yaw`` are only used by AckermannAvoider."""
+        """Call at the control rate with the latest filtered front distance
+        and, if there is an IMU, the current yaw (rad). ``rear`` is only used
+        by AckermannAvoider."""
         if not self.active:
             return []
+        self.turned_angle += self.direction * _yaw_change(
+            yaw, self._yaw, self.angular_velocity, t - self._t)
+        if yaw is not None:
+            self._yaw = yaw
+        self._t = t
+
         if front >= self.clear_distance:
             if self._clear_since is None:
                 self._clear_since = t
         else:
             self._clear_since = None
 
-        turned = self.turned(t)
-        if (turned >= self.min_turn and self._clear_since is not None
+        if (self.turned_angle >= self.min_turn and self._clear_since is not None
                 and t - self._clear_since >= self.clear_time):
             return self._end(EventType.DONE)
-        if turned >= self.max_turn:
+        if self.turned_angle >= self.max_turn or self.estimated_turn(t) >= self.max_turn:
             return self._end(EventType.FAILED)
         return []
 
@@ -251,13 +278,9 @@ class AckermannAvoider:
     def _advance(self, t: float, yaw: Optional[float]) -> None:
         dt = t - self._t
         linear, angular = self.command
-        if yaw is not None and self._yaw is not None:
-            dyaw = _wrap(yaw - self._yaw)
-        else:
-            dyaw = angular * dt
+        gained = self.direction * _yaw_change(yaw, self._yaw, angular, dt)
         if yaw is not None:
             self._yaw = yaw
-        gained = self.direction * dyaw
         self.turned_angle += gained
         self._phase_turn += gained
         self._phase_dist += abs(linear) * dt

@@ -14,11 +14,12 @@ def make(**kw):
     return Avoider(**kw)
 
 
-def run(a, front, t0=0.0, until=10.0, dt=0.05):
-    """Tick until the turn ends; ``front`` maps time -> distance."""
+def run(a, front, t0=0.0, until=10.0, dt=0.05, yaw=lambda t: None):
+    """Tick until the turn ends; ``front`` and ``yaw`` map time -> distance
+    and IMU yaw (None = no IMU)."""
     t = t0
     while t <= until:
-        events = a.tick(t, front(t))
+        events = a.tick(t, front(t), yaw=yaw(t))
         if events:
             return t, events[-1].type
         t += dt
@@ -71,6 +72,29 @@ def test_fails_when_boxed_in():
     t, result = run(a, lambda t: 0.2)
     assert result == EventType.FAILED
     assert t >= 2.0
+
+
+def test_measured_yaw_counts_the_turn():
+    a = make()
+    a.start(0.0, left=0.5, right=2.0, yaw=0.0)  # turns right
+    a.tick(1.0, 0.2, yaw=-0.3)  # commands say 1 rad, the IMU says 0.3
+    assert a.turned_angle == pytest.approx(0.3)
+
+
+def test_slipping_wheels_turn_longer():
+    a = make(min_turn=1.0)
+    a.start(0.0, yaw=0.0)
+    t, result = run(a, lambda t: 1.0, yaw=lambda t: 0.5 * t)  # half the commanded rate
+    assert result == EventType.DONE
+    assert t >= 2.0
+
+
+def test_gives_up_on_time_when_the_robot_does_not_turn():
+    a = make(max_turn=2.0)
+    a.start(0.0, yaw=0.0)
+    t, result = run(a, lambda t: 1.0, yaw=lambda t: 0.0)
+    assert result == EventType.FAILED
+    assert 2.0 <= t < 2.1
 
 
 def test_cancel_and_fail_only_when_active():
