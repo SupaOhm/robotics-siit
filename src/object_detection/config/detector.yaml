@@ -13,8 +13,10 @@ detector_node:
     # Lane 4 (audio_player).
     name_table:
       - "chair=chair"
-      - "dining table=table"
       - "bottle=bottle"
+      - "backpack=backpack"
+      - "laptop=laptop"
+      - "cup=cup"
 
     image_topic: "/camera/image_raw"   # real name confirmed at robot bring-up
     frame_timeout: 2.0                 # seconds to wait for a frame
