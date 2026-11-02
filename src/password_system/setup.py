@@ -18,14 +18,14 @@ setup(
     zip_safe=True,
     maintainer="Tinpatpun",
     maintainer_email="tinpat.vitya@gmail.com",
-    description="Hand-gesture sequence password check for the security robot checkpoint.",
+    description="Spoken password check for the security robot checkpoint.",
     license="MIT",
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
             "password_node = password_system.password_node:main",
             "make_password_hash = password_system.hash_tool:main",
-            "password_webcam_demo = password_system.webcam_demo:main",
+            "password_mic_demo = password_system.mic_demo:main",
         ],
     },
 )

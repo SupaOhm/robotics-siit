@@ -1,0 +1,20 @@
+detector_node:
+  ros__parameters:
+    # Exported NCNN folder. ~ is your home folder. See the README.
+    model_path: "~/models/yolo11n_ncnn_model"
+    image_size: 320
+
+    # Starting values, to tune on the robot in Phase 4. person is low on
+    # purpose: a false alarm only asks for a password, a miss skips it.
+    person_threshold: 0.25
+    object_threshold: 0.5
+
+    # "yolo class=spoken label". Each label needs a found_<label> clip from
+    # Lane 4 (audio_player).
+    name_table:
+      - "chair=chair"
+      - "dining table=table"
+      - "bottle=bottle"
+
+    image_topic: "/camera/image_raw"   # real name confirmed at robot bring-up
+    frame_timeout: 2.0                 # seconds to wait for a frame

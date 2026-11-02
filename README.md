@@ -15,13 +15,25 @@ package under `src/`, created and owned by its lane.
 
 ```
 src/
-  password_system/    Lane 4, gesture-sequence password (superseded: the password is spoken)
+  password_system/    Lane 4, spoken password (password_node)
   obstacle_avoidance/ Lane 3, distance sensor, obstacle threshold, turn-away logic
   ...                 other packages are added by their lanes
 docs/                 interface contract, architecture, report
 sim/                  CoppeliaSim scenes
+external/             third-party source kept as git submodules (see below)
 tools/                benchmarks and test scripts (not ROS packages)
 ```
+
+## External sources
+
+| Path | Source | Licence | Used for |
+|---|---|---|---|
+| `external/mini_project_arduino` | [toonzzzrock/mini_project_arduino](https://github.com/toonzzzrock/mini_project_arduino) | MIT | Existing MediaPipe gesture code (`python_camera.ipynb`) that Lane 2 (purin) ports into `gesture_control` |
+
+It is a git submodule pinned to one commit. Clone with
+`git clone --recurse-submodules`, or run `git submodule update --init` in an
+existing clone. It is not a ROS package: do not edit it here, copy what is
+needed into `src/`.
 
 ## Build
 

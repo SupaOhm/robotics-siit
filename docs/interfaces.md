@@ -29,14 +29,14 @@ robot.
 | Yahboom base and camera drivers | vendor | 1 | Robot |
 | `avoidance_node` | `obstacle_avoidance` | 3 | Robot |
 | `detector_node` | `object_detection` | 2 | Robot (laptop if too slow, D18) |
-| `password_node` | `password_check` | 4 | Robot |
+| `password_node` | `password_system` | 4 | Robot |
 | `audio_node` | `audio_player` | 4 | Robot |
 | `telegram_node` | `telegram_alert` | 4 | Robot |
 
 Package names other than `obstacle_avoidance` are suggestions. The lane
-picks the final name and updates this table. `password_node` is a new
-spoken-password node; it replaces the finger-count `src/password_system`
-package on `main` (Lane 4).
+picks the final name and updates this table. `password_node` is the
+spoken-password node. It replaced the finger-count code and kept the
+package name `password_system` (Lane 4).
 
 ```
  laptop                           robot
@@ -99,7 +99,7 @@ A sensor that fails while the node is running is different: the topic goes
 |---|---|---|---|
 | `/camera/image_raw` | `sensor_msgs/Image` | camera driver → detector, telegram | Onboard camera (D21). Real topic name confirmed at bring-up |
 | `/detect/request` | `std_msgs/String` | state_machine → detector_node | Request id. Classify what is in front now (D7) |
-| `/detect/result` | `std_msgs/String` (JSON) | detector_node → state_machine | Exactly one reply per request, with the same `id` (D8) |
+| `/detect/result` | `std_msgs/String` (JSON) | detector_node → state_machine | At most one reply per request, with the same `id`; none if there's no camera frame or YOLO fails (D8) |
 
 ```json
 {"id": "d7", "kind": "object",  "label": "chair",  "confidence": 0.82, "clip": "found_chair"}
@@ -119,7 +119,7 @@ A sensor that fails while the node is running is different: the topic goes
 |---|---|---|---|
 | `/password/start` | `std_msgs/Empty` | state_machine → password_node | Person found: start a session (3 attempts) |
 | `/password/cancel` | `std_msgs/Empty` | state_machine → password_node | Abort: the operator took over, or the person walked away |
-| `/password/result` | `std_msgs/String` | password_node → state_machine | One per session: `granted`, `denied` (3 wrong) or `cancelled` |
+| `/password/result` | `std_msgs/String` | password_node → state_machine | One per session: `granted`, `denied` (3 wrong, or 3 mic or speech engine failures in a row) or `cancelled` |
 
 - The password node plays its own prompts through `/audio/play`
   (`password_prompt`, `password_wrong`, `password_denied`).
@@ -140,6 +140,9 @@ topic is never used on the robot.
 
 - Requests that arrive while a clip plays are **queued**, not dropped.
   `alert` interrupts and plays at once.
+- In `BLOCKING`, publish `alert` first, then `blocking`, and repeat every
+  3 s (the two clips take about 2.5 s). `blocking` sent just before
+  `alert` gets cut off, and faster repeats build up a queue.
 - The cooldown (same clip not repeated within N s) applies only to
   `found_*` clips.
 
@@ -149,7 +152,7 @@ topic is never used on the robot.
 | `found_obstacle` | "Found an obstacle" | state_machine (`ANNOUNCE`, avoidance failed) |
 | `password_prompt` | "Say the password" | password_node |
 | `password_wrong` | "Wrong, try again" | password_node |
-| `password_denied` | "Access denied, calling the operator" | password_node (after 3 wrong) |
+| `password_denied` | "Access denied, calling the operator" | password_node (after 3 wrong, or 3 mic or speech engine failures in a row) |
 | `password_correct` | "Password correct, you may pass" | state_machine (`PASS` after `granted`) |
 | `operator_allowed` | "The operator has allowed you to pass" | state_machine (`PASS` after `allow`) |
 | `alert` | Alert sound | state_machine (`BLOCKING`) |
@@ -228,5 +231,4 @@ DRIVE ─obstacle appears─► CLASSIFY ─object / unknown─► ANNOUNCE ─�
 | Detector confidence threshold for `person` | Lane 2 |
 | How far `AVOID` turns, what counts as clear, and the sensor's coverage (front only or wider) | Lane 3 |
 | Time limit per YOLO frame on the robot before it moves to the laptop (D18). Must fit the 3 s `CLASSIFY` timeout plus one retry | Lane 5 |
-| Removing the finger-count `src/password_system` package once `password_node` lands | Lane 4 |
 | Password length and the password itself (kept out of the repo) | Lane 4 |
