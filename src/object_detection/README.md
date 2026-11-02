@@ -67,3 +67,6 @@ The rules are in plain Python, so the tests need no ROS or YOLO:
 ```bash
 python -m pytest test
 ```
+
+To check the rules against phone photos or robot recordings, see
+`tools/README.md`.
