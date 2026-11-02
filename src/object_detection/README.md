@@ -15,8 +15,8 @@ the robot: a named object, a person, or an unknown obstacle.
 
 - YOLO runs on the first frame after a request.
 - Any `person` above `person_threshold` wins, whatever else is in frame.
-- Otherwise the largest box is named, if it is in the name table and above
-  `object_threshold`.
+- Otherwise the largest box above `object_threshold` is named, if it is in the
+  name table. Weaker boxes are ignored.
 - Anything else is `unknown`, which plays `found_obstacle`.
 - With no camera frame, or if YOLO fails, there is no reply. The state machine
   retries, then goes to `CHECKPOINT`.
