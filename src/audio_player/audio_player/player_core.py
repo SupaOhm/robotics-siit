@@ -9,13 +9,14 @@ from pathlib import Path
 
 
 class AudioPlayer:
-    def __init__(self, cooldown=5.0, clip_dir=None):
+    def __init__(self, cooldown=5.0, clip_dir=None, logger=None):
         self.clip_dir = (
             Path(clip_dir)
             if clip_dir is not None
             else Path(__file__).resolve().parent.parent / "clips"
         )
         self.cooldown = cooldown
+        self.logger = logger
 
         self.queue = deque()
         self.last_found = {}
@@ -33,16 +34,26 @@ class AudioPlayer:
         )
         self.worker.start()
 
+    def _log(self, message, level="info"):
+        if self.logger is None:
+            print(message, flush=True)
+        elif level == "error":
+            self.logger.error(message)
+        elif level == "warning":
+            self.logger.warning(message)
+        else:
+            self.logger.info(message)
+
     def request(self, clip_id):
         # Accept only safe clip IDs, not arbitrary file paths
         if not re.fullmatch(r"[a-z][a-z0-9_]*", clip_id):
-            print(f"[INVALID] {clip_id}", flush=True)
+            self._log(f"[INVALID] {clip_id}", "warning")
             return False
 
         path = self.clip_dir / f"{clip_id}.wav"
 
         if not path.is_file():
-            print(f"[MISSING] {clip_id}", flush=True)
+            self._log(f"[MISSING] {clip_id}", "warning")
             return False
 
         with self.condition:
@@ -51,20 +62,22 @@ class AudioPlayer:
             # Do not queue duplicate alert or blocking clips
             if clip_id in ("alert", "blocking"):
                 if clip_id == self.current_clip or clip_id in self.queue:
-                    print(f"[DUPLICATE] {clip_id}", flush=True)
+                    self._log(f"[DUPLICATE] {clip_id}", "info")
                     return False
 
             now = time.monotonic()
 
             # Cooldown applies ONLY to found_* clips
             if clip_id.startswith("found_"):
-                last = self.last_found.get(clip_id, -float("inf"))
-
-                if now - last < self.cooldown:
-                    print(f"[COOLDOWN] {clip_id}", flush=True)
+                # Avoid duplicates while queued or playing.
+                if clip_id == self.current_clip or clip_id in self.queue:
+                    self._log(f"[DUPLICATE] {clip_id}", "info")
                     return False
 
-                self.last_found[clip_id] = now
+                last = self.last_found.get(clip_id, -float("inf"))
+                if now - last < self.cooldown:
+                    self._log(f"[COOLDOWN] {clip_id}", "info")
+                    return False
 
             if clip_id == "alert":
                 # Alert jumps to the front and interrupts playback
@@ -73,7 +86,7 @@ class AudioPlayer:
             else:
                 self.queue.append(clip_id)
 
-            print(f"[QUEUED] {clip_id}", flush=True)
+            self._log(f"[QUEUED] {clip_id}", "info")
             self.condition.notify()
             return True
 
@@ -132,7 +145,7 @@ class AudioPlayer:
                 self.playing = True
                 self.current_clip = clip_id
 
-            print(f"[PLAY] {clip_id}", flush=True)
+            self._log(f"[PLAY] {clip_id}", "info")
 
             try:
                 interrupted = self._play_file(
@@ -140,12 +153,15 @@ class AudioPlayer:
                 )
 
                 if interrupted:
-                    print(f"[INTERRUPTED] {clip_id}", flush=True)
+                    self._log(f"[INTERRUPTED] {clip_id}", "info")
                 else:
-                    print(f"[DONE] {clip_id}", flush=True)
+                    if clip_id.startswith("found_"):
+                        with self.condition:
+                            self.last_found[clip_id] = time.monotonic()
+                    self._log(f"[DONE] {clip_id}", "info")
 
             except Exception as error:
-                print(f"[ERROR] {clip_id}: {error}", flush=True)
+                self._log(f"[ERROR] {clip_id}: {error}", "error")
 
             finally:
                 with self.condition:

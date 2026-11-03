@@ -26,6 +26,9 @@ Example: `found_chair`
 - found_chair
 - found_table
 - found_bottle
+- found_backpack
+- found_laptop
+- found_cup
 - found_obstacle
 - password_prompt
 - password_wrong
@@ -35,8 +38,8 @@ Example: `found_chair`
 - alert
 - blocking
 
-More object clips can be added after confirmation
-of Lane 2's object labels.
+Target object labels: chair, bottle, backpack, laptop and cup.
+`found_table` is retained but is no longer a target label.
 
 ## Tests
 
@@ -54,7 +57,7 @@ The tests do not require ROS 2 or physical audio hardware.
 cd ~/robotics-siit
 colcon build --packages-select audio_player --symlink-install
 source install/setup.bash
-ros2 run audio_player audio_node
+ros2 launch audio_player audio.launch.py
 ```
 
 Test from another ROS 2 terminal:
@@ -69,8 +72,10 @@ and a configured audio output device.
 ## Status
 
 - Windows WAV playback: tested
-- Queue / cooldown / alert priority: 4 unit tests passed
-- ROS 2 build: pending
+- Queue / cooldown / alert priority / logging: 11 unit tests passed on Ubuntu
+- ROS 2 Humble build and launch: tested in Ubuntu VM
+- ROS logging through /rosout: tested
+- Backpack, laptop and cup audio: played successfully in Ubuntu VM
 - Physical robot speaker: pending
 
 ## Integration

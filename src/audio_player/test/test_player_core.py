@@ -310,3 +310,193 @@ def test_playback_failure_logs_error(clips, monkeypatch, capfd):
 
     finally:
         player.close()
+
+
+def test_found_cooldown_only_after_success(clips, monkeypatch):
+    attempts = []
+
+    def fake_play(self, path):
+        attempts.append(path.stem)
+        if len(attempts) == 1:
+            raise RuntimeError("speaker unavailable")
+        return False
+
+    monkeypatch.setattr(AudioPlayer, "_play_file", fake_play)
+
+    player = AudioPlayer(cooldown=60.0, clip_dir=clips)
+
+    try:
+        # First playback fails.
+        assert player.request("found_chair")
+        assert player.wait_until_idle(timeout=3)
+        assert "found_chair" not in player.last_found
+
+        # A failed playback must allow an immediate retry.
+        assert player.request("found_chair")
+        assert player.wait_until_idle(timeout=3)
+        assert attempts == ["found_chair", "found_chair"]
+
+        # Successful playback starts the cooldown.
+        assert "found_chair" in player.last_found
+        assert not player.request("found_chair")
+
+    finally:
+        player.close()
+
+
+def test_found_duplicate_while_playing_and_queued(clips, monkeypatch):
+    started = threading.Event()
+    release = threading.Event()
+    played = []
+
+    def fake_play(self, path):
+        played.append(path.stem)
+
+        if path.stem == "found_chair":
+            started.set()
+            release.wait(timeout=3)
+
+        return False
+
+    monkeypatch.setattr(AudioPlayer, "_play_file", fake_play)
+
+    player = AudioPlayer(cooldown=5.0, clip_dir=clips)
+
+    try:
+        assert player.request("found_chair")
+        assert started.wait(timeout=2)
+
+        # Reject duplicate while already playing.
+        assert not player.request("found_chair")
+
+        # Reject duplicate while waiting in queue.
+        assert player.request("found_table")
+        assert not player.request("found_table")
+
+        release.set()
+        assert player.wait_until_idle(timeout=3)
+
+        assert played == ["found_chair", "found_table"]
+
+        # Both clips finished successfully: cooldown active.
+        assert not player.request("found_chair")
+        assert not player.request("found_table")
+
+    finally:
+        release.set()
+        player.close()
+
+
+def test_ros_logger_receives_playback_error(clips, monkeypatch):
+    messages = []
+
+    class FakeLogger:
+        def info(self, message):
+            messages.append(("info", message))
+
+        def warning(self, message):
+            messages.append(("warning", message))
+
+        def error(self, message):
+            messages.append(("error", message))
+
+    def fake_play_failure(self, path):
+        raise RuntimeError("speaker unavailable")
+
+    monkeypatch.setattr(
+        AudioPlayer, "_play_file", fake_play_failure
+    )
+
+    player = AudioPlayer(
+        clip_dir=clips,
+        logger=FakeLogger(),
+    )
+
+    try:
+        assert player.request("blocking")
+        assert player.wait_until_idle(timeout=3)
+
+        assert ("info", "[PLAY] blocking") in messages
+        assert any(
+            level == "error"
+            and "[ERROR] blocking" in message
+            for level, message in messages
+        )
+
+    finally:
+        player.close()
+
+
+def test_ros_logger_severity_and_worker_recovery(clips, monkeypatch):
+    import inspect
+
+    class StrictLogger:
+        def __init__(self):
+            self.calls = []
+            self.severity_by_site = {}
+
+        def _record(self, level, message):
+            frame = inspect.currentframe().f_back.f_back
+            site = (frame.f_code.co_filename, frame.f_lineno, frame.f_lasti)
+            del frame
+
+            previous = self.severity_by_site.setdefault(site, level)
+            if previous != level:
+                raise ValueError(
+                    "Logger severity cannot be changed between calls."
+                )
+            self.calls.append((level, message))
+
+        def info(self, message):
+            self._record("info", message)
+
+        def warning(self, message):
+            self._record("warning", message)
+
+        def error(self, message):
+            self._record("error", message)
+
+    played = []
+
+    def fake_play(self, path):
+        played.append(path.stem)
+        if path.stem == "blocking":
+            raise RuntimeError("speaker unavailable")
+        return False
+
+    monkeypatch.setattr(AudioPlayer, "_play_file", fake_play)
+
+    logger = StrictLogger()
+    player = AudioPlayer(clip_dir=clips, logger=logger)
+
+    try:
+        assert player.request("found_chair")
+        assert player.wait_until_idle(timeout=3)
+
+        # Simulate a failed speaker playback.
+        assert player.request("blocking")
+        assert player.wait_until_idle(timeout=3)
+        assert player.worker.is_alive()
+
+        # Audio must still play after the failure.
+        assert player.request("found_table")
+        assert player.wait_until_idle(timeout=3)
+        assert played == ["found_chair", "blocking", "found_table"]
+
+        # Missing and invalid clip IDs must not crash logging.
+        assert not player.request("found_nothing")
+        assert not player.request("../invalid")
+        assert player.worker.is_alive()
+
+        assert any(
+            level == "error" and "[ERROR] blocking" in message
+            for level, message in logger.calls
+        )
+        assert any(
+            level == "warning" and "[MISSING] found_nothing" in message
+            for level, message in logger.calls
+        )
+        assert ("info", "[DONE] found_table") in logger.calls
+
+    finally:
+        player.close()

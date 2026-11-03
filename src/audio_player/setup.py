@@ -21,6 +21,14 @@ setup(
             "share/" + package_name + "/clips",
             glob("clips/*.wav"),
         ),
+        (
+            "share/" + package_name + "/launch",
+            glob("launch/*.launch.py"),
+        ),
+        (
+            "share/" + package_name + "/config",
+            glob("config/*.yaml"),
+        ),
     ],
     install_requires=["setuptools"],
     zip_safe=True,
