@@ -32,7 +32,8 @@ class DetectorNode(Node):
         p("image_size", 320)
         p("person_threshold", 0.25)
         p("object_threshold", 0.5)
-        p("name_table", ["chair=chair", "dining table=table", "bottle=bottle"])
+        p("name_table", ["chair=chair", "bottle=bottle", "backpack=backpack",
+                          "laptop=laptop", "cup=cup"])
         p("image_topic", "/camera/image_raw")
         p("frame_timeout", 2.0)
 

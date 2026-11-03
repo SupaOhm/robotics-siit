@@ -12,7 +12,7 @@ people with a password.
 2. The distance sensor detects an obstacle, the robot stops, and the camera
    classifies it.
 3. **Object:** the robot says its name in English ("Found a chair", "Found a
-   table"). If the object is unknown or confidence is low, it says "Found an
+   bottle"). If the object is unknown or confidence is low, it says "Found an
    obstacle". Then it turns away and continues.
 4. **Person:** the robot asks for a password.
    - Correct: it confirms out loud, turns away and continues (D13).
@@ -71,7 +71,7 @@ people with a password.
 - [ ] Lane 1: core state machine and gesture command override
 - [ ] Lane 2 (purin): gesture code as a ROS node on the laptop, sending drive commands to the robot
 - [x] Lane 2 (ohm): detector node with the person class and an English name table (3 objects)
-- [ ] Lane 2 (ohm): YOLO running on the robot; name table grown to 8–10 objects
+- [ ] Lane 2 (ohm): YOLO running on the robot; name table grown to 5 objects
 - [ ] Lane 3: sensor driver, noise filter, avoidance turn logic
 - [ ] Lane 4: record audio clips and audio player
 - [x] Lane 4: Telegram bot
