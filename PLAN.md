@@ -69,7 +69,8 @@ people with a password.
 ### Phase 2: Parallel development (Oct 31 – Nov 3)
 
 - [ ] Lane 1: core state machine and gesture command override
-- [ ] Lane 2 (purin): gesture code as a ROS node on the laptop, sending drive commands to the robot
+- [x] Lane 2 (purin): gesture node on the laptop (`gesture_control`, #14), runs on the operator's Mac
+- [ ] Lane 2 (purin): laptop → robot link over the hotspot; `/gesture/command` received on the robot
 - [x] Lane 2 (ohm): detector node with the person class and an English name table (3 objects)
 - [ ] Lane 2 (ohm): YOLO running on the robot; name table grown to 5 objects
 - [ ] Lane 3: sensor driver, noise filter, avoidance turn logic
