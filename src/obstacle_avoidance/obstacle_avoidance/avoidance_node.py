@@ -21,6 +21,7 @@ import math
 import rclpy
 from geometry_msgs.msg import Twist
 from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Imu, LaserScan, Range
 from std_msgs.msg import Bool, Empty, Float32, String
 
@@ -97,14 +98,17 @@ class AvoidanceNode(Node):
         self.create_subscription(Empty, "/avoidance/start", self.on_start, 10)
         self.create_subscription(Empty, "/avoidance/cancel", self.on_cancel, 10)
 
+        # Best effort: it hears both best-effort and reliable publishers. A
+        # reliable subscriber hears nothing from a best-effort sensor driver.
+        sensor_qos = qos_profile_sensor_data
         if self.input_type == "scan":
-            self.create_subscription(LaserScan, g("scan_topic"), self.on_scan, 10)
+            self.create_subscription(LaserScan, g("scan_topic"), self.on_scan, sensor_qos)
         elif self.input_type == "range":
-            self.create_subscription(Range, g("range_topic"), self.on_range, 10)
+            self.create_subscription(Range, g("range_topic"), self.on_range, sensor_qos)
         else:
             raise RuntimeError("unknown input_type: %s" % self.input_type)
         if g("imu_topic"):
-            self.create_subscription(Imu, g("imu_topic"), self.on_imu, 50)
+            self.create_subscription(Imu, g("imu_topic"), self.on_imu, sensor_qos)
 
         self.create_timer(1.0 / float(g("control_rate")), self.on_timer)
         self.create_timer(1.0 / float(g("detected_rate")), self.publish_detected)

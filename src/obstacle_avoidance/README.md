@@ -94,6 +94,14 @@ Check the Yahboom sensor topic with `ros2 topic list` and set `scan_topic`
 or `range_topic` to match. If the LiDAR's 0 degree points backward, set
 `front_angle_deg: 180.0`.
 
+The node subscribes to the sensor and the IMU with `qos_profile_sensor_data`
+(best effort), which hears both best-effort and reliable publishers.
+`ros2 topic info -v /scan` shows what the driver publishes.
+
+During a turn, `angular_velocity.z` on `/imu/data_raw` should read about
+the commanded rate in rad/s, positive turning left. A driver that sends
+deg/s or flips the sign makes every turn fail.
+
 ## Try it in CoppeliaSim (no ROS)
 
 [`tools/sim_avoidance.py`](../../tools/sim_avoidance.py) drives the course's
