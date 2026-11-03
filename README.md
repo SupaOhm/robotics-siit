@@ -7,6 +7,10 @@ password fails.
 
 - **Plan, lanes and timeline:** [PLAN.md](PLAN.md)
 - **How to contribute:** [CONTRIBUTING.md](CONTRIBUTING.md)
+- **ROS contract (topics, payloads, state machine):** [docs/interfaces.md](docs/interfaces.md)
+- **Why it is built this way (D-numbers):** [docs/decisions.md](docs/decisions.md)
+- **Robot bring-up checklist:** [docs/robot-setup.md](docs/robot-setup.md)
+- **Glossary:** [CONTEXT.md](CONTEXT.md)
 
 ## Layout
 
@@ -49,6 +53,10 @@ cd robotics-siit
 colcon build --symlink-install
 source install/setup.bash
 ```
+
+macOS has no official ROS 2 packages. On a Mac, `bash tools/mac_ros_setup.sh`
+installs Humble from RoboStack (conda) and builds `gesture_control` (tested
+on an M1). See [src/gesture_control/README.md](src/gesture_control/README.md).
 
 Keep the logic in plain Python modules and keep the ROS node thin, as
 `password_system` does. Then the tests run on any laptop without ROS:
