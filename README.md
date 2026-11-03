@@ -15,13 +15,18 @@ package under `src/`, created and owned by its lane.
 
 ```
 src/
+  gesture_control/    Lane 2, hand gestures on the laptop (gesture_node)
+  object_detection/   Lane 2, YOLO object naming (detector_node)
+  audio_player/       Lane 4, spoken clips (audio_node)
   password_system/    Lane 4, spoken password (password_node)
+  telegram_alert/     Lane 4, operator alerts (telegram_node)
   ...                 other packages are added by their lanes
-docs/                 interface contract, architecture, report
-sim/                  CoppeliaSim scenes
+docs/                 interface contract, decisions, robot setup
 external/             third-party source kept as git submodules (see below)
-tools/                benchmarks and test scripts (not ROS packages)
+tools/                setup, demo and benchmark scripts (not ROS packages)
 ```
+
+`sim/` (CoppeliaSim scenes, Lane 5) is planned but not created yet.
 
 ## External sources
 
