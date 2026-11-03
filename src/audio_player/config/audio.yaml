@@ -1,0 +1,3 @@
+audio_node:
+  ros__parameters:
+    cooldown_seconds: 5.0

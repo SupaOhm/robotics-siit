@@ -4,6 +4,7 @@ from pathlib import Path
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
+from rcl_interfaces.msg import ParameterDescriptor
 from ament_index_python.packages import get_package_share_directory
 
 from .player_core import AudioPlayer
@@ -13,7 +14,11 @@ class AudioNode(Node):
     def __init__(self):
         super().__init__("audio_node")
 
-        self.declare_parameter("cooldown_seconds", 5.0)
+        self.declare_parameter(
+            "cooldown_seconds",
+            5.0,
+            descriptor=ParameterDescriptor(dynamic_typing=True),
+        )
 
         clip_dir = (
             Path(get_package_share_directory("audio_player"))
@@ -21,8 +26,9 @@ class AudioNode(Node):
         )
 
         self.player = AudioPlayer(
-            cooldown=self.get_parameter("cooldown_seconds").value,
+            cooldown=float(self.get_parameter("cooldown_seconds").value),
             clip_dir=clip_dir,
+            logger=self.get_logger(),
         )
 
         self.subscription = self.create_subscription(
