@@ -425,3 +425,78 @@ def test_ros_logger_receives_playback_error(clips, monkeypatch):
 
     finally:
         player.close()
+
+
+def test_ros_logger_severity_and_worker_recovery(clips, monkeypatch):
+    import inspect
+
+    class StrictLogger:
+        def __init__(self):
+            self.calls = []
+            self.severity_by_site = {}
+
+        def _record(self, level, message):
+            frame = inspect.currentframe().f_back.f_back
+            site = (frame.f_code.co_filename, frame.f_lineno, frame.f_lasti)
+            del frame
+
+            previous = self.severity_by_site.setdefault(site, level)
+            if previous != level:
+                raise ValueError(
+                    "Logger severity cannot be changed between calls."
+                )
+            self.calls.append((level, message))
+
+        def info(self, message):
+            self._record("info", message)
+
+        def warning(self, message):
+            self._record("warning", message)
+
+        def error(self, message):
+            self._record("error", message)
+
+    played = []
+
+    def fake_play(self, path):
+        played.append(path.stem)
+        if path.stem == "blocking":
+            raise RuntimeError("speaker unavailable")
+        return False
+
+    monkeypatch.setattr(AudioPlayer, "_play_file", fake_play)
+
+    logger = StrictLogger()
+    player = AudioPlayer(clip_dir=clips, logger=logger)
+
+    try:
+        assert player.request("found_chair")
+        assert player.wait_until_idle(timeout=3)
+
+        # Simulate a failed speaker playback.
+        assert player.request("blocking")
+        assert player.wait_until_idle(timeout=3)
+        assert player.worker.is_alive()
+
+        # Audio must still play after the failure.
+        assert player.request("found_table")
+        assert player.wait_until_idle(timeout=3)
+        assert played == ["found_chair", "blocking", "found_table"]
+
+        # Missing and invalid clip IDs must not crash logging.
+        assert not player.request("found_nothing")
+        assert not player.request("../invalid")
+        assert player.worker.is_alive()
+
+        assert any(
+            level == "error" and "[ERROR] blocking" in message
+            for level, message in logger.calls
+        )
+        assert any(
+            level == "warning" and "[MISSING] found_nothing" in message
+            for level, message in logger.calls
+        )
+        assert ("info", "[DONE] found_table") in logger.calls
+
+    finally:
+        player.close()

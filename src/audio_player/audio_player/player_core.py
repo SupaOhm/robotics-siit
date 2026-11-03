@@ -37,8 +37,12 @@ class AudioPlayer:
     def _log(self, message, level="info"):
         if self.logger is None:
             print(message, flush=True)
+        elif level == "error":
+            self.logger.error(message)
+        elif level == "warning":
+            self.logger.warning(message)
         else:
-            getattr(self.logger, level)(message)
+            self.logger.info(message)
 
     def request(self, clip_id):
         # Accept only safe clip IDs, not arbitrary file paths
