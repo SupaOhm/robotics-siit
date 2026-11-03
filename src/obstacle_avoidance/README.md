@@ -63,9 +63,9 @@ machine, launch with `cmd_vel_topic:=/cmd_vel`.
   After 270 degrees it reports `failed`.
 
   Mecanum wheels slip when they turn in place, so the turned angle comes
-  from the IMU gyro (`/imu/data_raw`). With no IMU it is speed x time.
-  Speed x time also caps the turn: a robot that doesn't turn still reports
-  `failed` after 4.7 s.
+  from the IMU gyro (`/imu/data_raw`). With no IMU, or after 0.2 s with no
+  gyro reading, it is speed x time. Speed x time also caps the turn: a
+  robot that doesn't turn still reports `failed` after 4.7 s.
 - **Sensor silent for 0.5 s:** `/obstacle/detected` stays `True` until
   readings come back, and any turn ends as `failed`. A turn requested before
   the first reading also fails.
@@ -128,8 +128,8 @@ cd src/obstacle_avoidance
 python -m pytest test
 ```
 
-The tests cover the filter, the hysteresis, LiDAR sector maths and the turn
-logic. They don't need ROS or a sensor.
+The tests cover the filter, the hysteresis, LiDAR sector maths, the gyro and
+the turn logic. They don't need ROS or a sensor.
 
 ## Files
 
@@ -139,6 +139,7 @@ obstacle_avoidance/
   detector.py       stop / clear threshold with hysteresis
   scan.py           LaserScan -> front (corridor) / left / right distances
   avoider.py        turn-away state machine
+  gyro.py           IMU gyro -> yaw, None while the gyro is silent
   avoidance_node.py thin ROS 2 node
 config/avoidance.yaml
 launch/avoidance.launch.py

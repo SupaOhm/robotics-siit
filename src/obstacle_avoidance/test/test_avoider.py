@@ -97,6 +97,23 @@ def test_gives_up_on_time_when_the_robot_does_not_turn():
     assert 2.0 <= t < 2.1
 
 
+def test_falls_back_to_speed_x_time_when_the_imu_stops():
+    a = make(min_turn=1.0)
+    a.start(0.0, yaw=0.0)
+    imu = lambda t: t if t < 0.3 else None  # silent from 0.3 s
+    t, result = run(a, lambda t: 1.0, yaw=imu)
+    assert result == EventType.DONE
+    assert 1.0 <= t < 1.1
+
+
+def test_imu_coming_back_is_not_counted_twice():
+    a = make()
+    a.start(0.0, yaw=0.0)
+    imu = lambda t: None if 0.3 <= t < 0.6 else t  # the robot keeps turning at 1 rad/s
+    run(a, lambda t: 0.2, until=1.0, yaw=imu)
+    assert a.turned_angle == pytest.approx(1.0, abs=0.06)
+
+
 def test_cancel_and_fail_only_when_active():
     a = make()
     assert a.cancel() == []

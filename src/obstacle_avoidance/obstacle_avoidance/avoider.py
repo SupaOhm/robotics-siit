@@ -117,7 +117,7 @@ class Avoider:
 
     def tick(self, t: float, front: float, yaw: Optional[float] = None) -> List[Event]:
         """Call at the control rate with the latest filtered front distance
-        and, if there is an IMU, the current yaw (rad)."""
+        and the current yaw (rad), or None with no IMU or a silent one."""
         if not self.active:
             return []
         if yaw is not None and self._yaw is not None:
@@ -125,8 +125,10 @@ class Avoider:
         else:
             gained = self.angular_velocity * (t - self._t)
         self.turned_angle += self.direction * gained
-        if yaw is not None:
-            self._yaw = yaw
+        # None while the IMU is silent, so the yaw it comes back with is not
+        # measured against a reading from before the gap: that turn was
+        # already counted as speed x time.
+        self._yaw = yaw
         self._t = t
 
         if front >= self.clear_distance:

@@ -27,6 +27,7 @@ from std_msgs.msg import Bool, Empty, Float32, String
 
 from .avoider import Avoider, EventType
 from .detector import ObstacleDetector
+from .gyro import GyroYaw
 from .range_filter import RangeFilter
 from .scan import front_left_right
 
@@ -55,6 +56,7 @@ class AvoidanceNode(Node):
         p("clear_distance", 0.40)
         p("sensor_timeout", 0.5)
         p("imu_topic", "/imu/data_raw")  # "" = estimate the turn as speed x time
+        p("imu_timeout", 0.2)
         p("turn_speed", 1.0)
         p("min_turn_deg", 30.0)
         p("max_turn_deg", 270.0)
@@ -86,8 +88,7 @@ class AvoidanceNode(Node):
             clear_time=float(g("clear_time")),
             default_direction=int(g("default_direction")),
         )
-        self.yaw = None
-        self.last_imu_t = None
+        self.gyro = GyroYaw(float(g("imu_timeout")))
         self.last_reading_t = None
         self.stale = True
 
@@ -143,12 +144,9 @@ class AvoidanceNode(Node):
         self.distance_pub.publish(Float32(data=float(distance)))
 
     def on_imu(self, msg) -> None:
-        """Integrate the gyro into a yaw. Only differences matter, so it
-        starts at 0 and drift over one turn is small."""
-        t = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9 or self.now()
-        if self.last_imu_t is not None and 0 < t - self.last_imu_t < 0.5:
-            self.yaw = (self.yaw or 0.0) + msg.angular_velocity.z * (t - self.last_imu_t)
-        self.last_imu_t = t
+        now = self.now()
+        stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9 or now
+        self.gyro.update(stamp, msg.angular_velocity.z, now)
 
     def publish_detected(self) -> None:
         """Fixed-rate heartbeat (contract D5): a silent sensor reads as blocked."""
@@ -160,7 +158,8 @@ class AvoidanceNode(Node):
             self.result_pub.publish(String(data="failed"))
             return
         side = lambda f: math.inf if f.value is None else f.value
-        self.publish(self.avoider.start(self.now(), side(self.left), side(self.right), self.yaw))
+        t = self.now()
+        self.publish(self.avoider.start(t, side(self.left), side(self.right), self.gyro.yaw(t)))
 
     def on_cancel(self, _msg) -> None:
         self.publish(self.avoider.cancel())
@@ -174,7 +173,7 @@ class AvoidanceNode(Node):
             self.detector.reset()
             self.publish(self.avoider.fail())
         if self.avoider.active:
-            self.publish(self.avoider.tick(t, self.front.value, self.yaw))
+            self.publish(self.avoider.tick(t, self.front.value, self.gyro.yaw(t)))
         if self.avoider.active:
             self.send_turn(self.avoider.angular_velocity)
 
