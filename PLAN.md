@@ -73,7 +73,7 @@ people with a password.
 - [ ] Lane 2 (purin): laptop → robot link over the hotspot; `/gesture/command` received on the robot
 - [x] Lane 2 (ohm): detector node with the person class and an English name table (3 objects)
 - [ ] Lane 2 (ohm): YOLO running on the robot; name table grown to 5 objects
-- [ ] Lane 3: sensor driver, noise filter, avoidance turn logic
+- [x] Lane 3: sensor driver, noise filter, avoidance turn logic (`obstacle_avoidance`, #3)
 - [ ] Lane 4: record audio clips and audio player
 - [x] Lane 4: Telegram bot
 - [x] Lane 4: spoken password (`password_node`)
