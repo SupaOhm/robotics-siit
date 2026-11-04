@@ -24,6 +24,7 @@ src/
   audio_player/       Lane 4, spoken clips (audio_node)
   password_system/    Lane 4, spoken password (password_node)
   telegram_alert/     Lane 4, operator alerts (telegram_node)
+  obstacle_avoidance/ Lane 3, obstacle stop and turn-away (avoidance_node)
   ...                 other packages are added by their lanes
 docs/                 interface contract, decisions, robot setup
 external/             third-party source kept as git submodules (see below)
