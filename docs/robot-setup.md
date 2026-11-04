@@ -38,6 +38,10 @@ export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp   # sudo apt install ros-humble-rmw
 
 ## 3. Hardware
 
+`python3 tools/lane3_bringup_check.py` runs the Lane 3 rows (turn in place,
+IMU, distance sensor, low objects) and prints results to paste here. Stop the
+state machine first: the script sends its own turn on `/cmd_vel`.
+
 | Device | Check | Result |
 |---|---|---|
 | Base | `ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.1}}"` moves it, zero stops it | |
