@@ -57,10 +57,14 @@ Rules:
   `TELEGRAM_ALLOWED_USERS` set, only those users can press them.
 - **No camera frame?** The alert is still sent as text with "(no camera
   image)". A frame older than `max_image_age` gets "(camera image N s old)".
-  If the photo upload fails or takes more than 8 s, the alert is sent as
-  text instead, so it reaches the operator early in the 30 s. If a slow
-  photo still arrives, it has the same buttons: the first press on either
-  copy counts, and the other answers "This alert is no longer active".
+  A frame that can't be made into a JPEG (a broken `cv_bridge` or `cv2`, or
+  an encoding other than `bgr8`, `rgb8`, `mono8` or `yuv422_yuy2`) gets
+  "(camera image failed)". If the photo upload fails or stalls, the alert is
+  sent as text instead, normally early in the 30 s. That isn't guaranteed:
+  the 8 s limit is on each network write, not on the whole send, and connect
+  and reply waits come on top. If a slow photo still arrives, it has the same
+  buttons: the first press on either copy counts, and the other answers
+  "This alert is no longer active".
 - **No internet at start-up** (hotspot not up yet): the node keeps trying,
   every 2 s up to every 60 s, and queues alerts until it connects. A wrong
   token stops the node with an error.
@@ -101,8 +105,10 @@ Rules:
 pip install python-telegram-bot      # tested with 22.8
 ```
 
-`cv_bridge` and OpenCV come with ROS. The robot needs internet through the
-phone hotspot (D17). Check it with `ping api.telegram.org`.
+`cv_bridge` and OpenCV come with ROS. They're only imported when an alert
+needs a photo, so if NumPy 2 breaks them, alerts still go out as text. The
+robot needs internet through the phone hotspot (D17). Check it with
+`ping api.telegram.org`.
 
 ## Build and run
 
@@ -150,6 +156,8 @@ python -m pytest test
   `send_photo` / edit calls, buttons, photo fallback, timeouts, retries,
   and that a close waits for a send in flight. It needs
   `python-telegram-bot` installed, so CI skips it.
+- `test_node_camera.py` starts the node with fake ROS, `cv2` and `cv_bridge`:
+  a broken camera stack loses the photo, not the alert.
 
 ## Files
 
@@ -169,9 +177,9 @@ test/
 
 - **Real Telegram: tested with `bot_demo` from a laptop** (Nov 1): photo
   alert, no answer for 30 s, expired buttons, blocking card, Resume; and
-  photo alert then Allow. The ROS node itself has been built and started
-  on ROS 2 Humble (Docker), but not yet run with real Telegram or on the
-  robot.
+  photo alert then Allow. The ROS node has sent real alerts from ROS 2
+  Humble in Docker (Nov 4): a photo, and a text alert with "(camera image
+  failed)" under NumPy 2. It has not run on the robot yet.
 - If a send times out but did arrive, that message keeps its buttons. A
   press on it gets "no longer active" and publishes nothing.
 - `/robot/state` closing uses the state names in `docs/interfaces.md`
