@@ -254,7 +254,7 @@ class UltralyticsYolo:
             from ultralytics import YOLO
         except ImportError as e:
             sys.exit(f"Ultralytics not installed ({e}).\nInstall: pip install ultralytics")
-        self.model = YOLO(model_path)
+        self.model = YOLO(model_path, task="detect")   # NCNN folders can't guess the task
         self.imgsz = imgsz
 
     def predict(self, frame):
