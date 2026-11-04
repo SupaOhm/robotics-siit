@@ -93,6 +93,13 @@ A sensor that fails while the node is running is different: the topic goes
 `true`, which may start `CLASSIFY`. That ends as `failed` and returns to
 `DRIVE`.
 
+**How `AVOID` turns.** In place at 1 rad/s, toward the side with more room
+(ultrasonic has no side readings, so it turns left). It is done once a
+corridor ahead as wide as the robot (±0.20 m) has stayed clear to 0.40 m for
+0.3 s and the robot has turned at least 30°. Past 270°, or 4.7 s of turning,
+it reports `failed`. The LiDAR decides blocked and clear from that corridor
+and the direction from ±90° to the sides; ultrasonic sees the front only.
+
 ### Detection (Lane 2)
 
 | Topic | Type | From → To | Meaning |
@@ -229,6 +236,5 @@ DRIVE ─obstacle appears─► CLASSIFY ─object / unknown─► ANNOUNCE ─�
 |---|---|
 | Real camera topic name and the sensor fitted (bring-up, D19, D21) | Lane 1 |
 | Detector confidence threshold for `person` | Lane 2 |
-| How far `AVOID` turns, what counts as clear, and the sensor's coverage (front only or wider) | Lane 3 |
 | Time limit per YOLO frame on the robot before it moves to the laptop (D18). Must fit the 3 s `CLASSIFY` timeout plus one retry | Lane 5 |
 | Password length and the password itself (kept out of the repo) | Lane 4 |

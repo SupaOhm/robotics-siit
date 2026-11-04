@@ -36,7 +36,6 @@ from obstacle_avoidance.scan import front_left_right
 
 WHEEL_RADIUS = 0.05   # m, Lab 03/04 robot (Lab 04 main.py)
 TRACK = 0.30          # m, effective wheel track (Lab 04 main.py)
-DRIVE_SPEED = 0.10    # m/s, the lab's FORWARD_SPEED 2.0 rad/s
 ANNOUNCE_PAUSE = 1.0  # s stopped before AVOID
 
 
@@ -109,6 +108,7 @@ def run(sim, args, log):
     sim.setStepping(True)
     sim.startSimulation()
     state, was_blocked, last_scan = "DRIVE", False, saved and saved["timestamp"]
+    blocked_at = None
     t, t_stopped, yaw_start, avoids, closest_seen = 0.0, 0.0, 0.0, 0, math.inf
     wall_start = time.monotonic()
     try:
@@ -138,11 +138,16 @@ def run(sim, args, log):
 
             if state == "DRIVE":
                 if detector.blocked and not was_blocked:
+                    blocked_at = t  # the state machine hears it --react later
+                if blocked_at is not None and t - blocked_at >= args.react:
+                    blocked_at = None
                     wheels(0, 0)
                     state, t_stopped = "STOPPED", t
                     log("t=%5.2f  obstacle at %.3f m, stop" % (t, front))
+                elif blocked_at is not None or not detector.blocked:
+                    wheels(args.speed, 0)
                 else:
-                    wheels(0 if detector.blocked else DRIVE_SPEED, 0)
+                    wheels(0, 0)
             elif state == "STOPPED":
                 if t - t_stopped >= ANNOUNCE_PAUSE:
                     ev = avoider.start(t, side(left_f), side(right_f), heading())[0]
@@ -179,6 +184,9 @@ def main():
     parser.add_argument("--seconds", type=float, default=45.0, help="simulated time to run")
     parser.add_argument("--realtime", action="store_true", help="run at real speed, to watch it")
     parser.add_argument("--wall-ahead", type=float, default=1.0, help="m from the robot to the wall")
+    parser.add_argument("--speed", type=float, default=0.10, help="m/s while driving (0.10 = the lab's FORWARD_SPEED)")
+    parser.add_argument("--react", type=float, default=0.0,
+                        help="s before the stand-in state machine stops the robot (heartbeat and tick delay)")
     parser.add_argument("--host", default="localhost")
     parser.add_argument("--port", type=int, default=23000)
     args = parser.parse_args()
