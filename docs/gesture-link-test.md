@@ -19,7 +19,9 @@ echo $ROS_LOCALHOST_ONLY     # must be 0 or empty
 hostname -I                  # the robot's IP on the hotspot
 ```
 
-On the Mac:
+On the Mac, with any VPN off first. Tailscale counts (`tailscale down`): its
+multicast route hides ROS nodes from each other, even on the same Mac, so
+`check` fails with 0 messages.
 
 ```bash
 git checkout main && git pull
@@ -47,6 +49,7 @@ lines), then check:
 
 ```bash
 echo $ROS_DOMAIN_ID $RMW_IMPLEMENTATION   # 42 rmw_cyclonedds_cpp
+ros2 daemon stop                          # an old daemon keeps the last network's address
 ```
 
 If macOS asks whether python may accept incoming network connections,
