@@ -46,10 +46,16 @@ ros2 topic pub -1 /detect/result std_msgs/String '{data: "{\"id\": \"d1\", \"kin
   or 0.5 s without gestures stops them.
 - `back` held for 1 s counts from entering the state, and only once per
   hold: holding `back` out of `BLOCKING` turns away, and doesn't then also
-  cancel that turn.
+  cancel that turn. A hold carried in from `DRIVE` (reversing) doesn't
+  count at all: release `back` and hold it again, so reversing into a
+  person never skips the password.
+- Entering `CLASSIFY` sends a zero `/cmd_vel` at once, so the robot has
+  stopped before the detector takes its frame.
 - A `/detect/result` with a `kind` other than `object`, `person` or
-  `unknown` goes to `CHECKPOINT`. A `/password/result` other than
-  `granted` goes to `WAIT_OPERATOR`. An `/avoidance/result` other than
-  `done` counts as `failed`.
+  `unknown` goes to `CHECKPOINT`. A `/password/result` of `cancelled` is
+  ignored, since the state machine only cancels as it leaves `CHECKPOINT`,
+  so it belongs to an old session. Any other result except `granted` goes
+  to `WAIT_OPERATOR`. An `/avoidance/result` other than `done` counts as
+  `failed`.
 - Obstacle silence never counts as a clear path, so it can't end
   `CHECKPOINT` as "person left".

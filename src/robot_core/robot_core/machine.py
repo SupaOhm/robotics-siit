@@ -43,7 +43,7 @@ class Settings:
     obstacle_timeout: float = 1.0   # no /obstacle/detected this long -> blocked (D5)
     avoid_cmd_timeout: float = 0.5  # stale /avoidance/cmd_vel -> stop
     detect_timeout: float = 3.0     # per /detect/request, retried once (D7)
-    announce_pause: float = 1.5     # ANNOUNCE -> AVOID
+    announce_pause: float = 2.0     # ANNOUNCE -> AVOID, after the found_* clip
     pass_pause: float = 2.5         # PASS -> AVOID
     cleared_window: float = 20.0    # after PASS a person counts as unknown (D12)
     checkpoint_clear: float = 5.0   # path clear this long -> person left (D29)
@@ -131,8 +131,8 @@ class StateMachine:
         return self._enter(ANNOUNCE, now)
 
     def on_password_result(self, result, now):
-        if self.state != CHECKPOINT:
-            return []
+        if self.state != CHECKPOINT or result == "cancelled":
+            return []  # we only cancel on leaving, so this is an old session
         if result == "granted":
             self.pass_clip = "password_correct"
             return self._enter(PASS, now)
@@ -198,11 +198,16 @@ class StateMachine:
         return []
 
     def _enter(self, state, now):
+        if self.state == DRIVE and self.back_since is not None:
+            # Reversing in DRIVE isn't an override: release `back` first
+            self.back_since = None
+            self.back_latched = True
         self.state = state
         self.entered_at = now
         out = [("/robot/state", state)]
         if state == CLASSIFY:
             self.detect_retried = False
+            out.append(("/cmd_vel", (0.0, 0.0)))  # stopped before the frame
             out += self._request_detect(now)
         elif state == ANNOUNCE:
             out.append(("/audio/play", self.announce_clip))

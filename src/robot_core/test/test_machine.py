@@ -118,13 +118,26 @@ def test_obstacle_appearing_requests_detection_and_stops(r):
     assert r.wheels() == (0.0, 0.0)
 
 
+def test_classify_stops_the_wheels_before_the_request(r):
+    # The detector's frame must not be taken while the robot still moves
+    r.gesture = "left"
+    r.wait(0.1)
+    r.out.clear()
+    r.send("on_obstacle", True)
+    topics = [t for t, _ in r.out]
+    assert r.out[topics.index("/cmd_vel")] == ("/cmd_vel", (0.0, 0.0))
+    assert topics.index("/cmd_vel") < topics.index("/detect/request")
+
+
 def test_object_announced_then_avoided_then_drive(r):
     rid = r.to_classify()
     r.send("on_detect_result", {"id": rid, "kind": "object", "label": "chair",
                                 "confidence": 0.8, "clip": "found_chair"})
     assert r.m.state == ANNOUNCE
     assert r.sent("/audio/play") == ["found_chair"]
-    r.wait(1.5)
+    r.wait(1.9)  # found_* clips run up to 1.99 s
+    assert r.m.state == ANNOUNCE
+    r.wait(0.2)
     assert r.m.state == AVOID
     assert r.sent("/avoidance/start") == [None]
     r.send("on_avoidance_result", "done")
@@ -168,7 +181,7 @@ def test_avoidance_cmd_forwarded_only_in_avoid(r):
     assert r.wheels() == (0.0, 0.0)
     rid = r.to_classify()
     r.send("on_detect_result", {"id": rid, "kind": "unknown"})
-    r.wait(1.5)
+    r.wait(2.1)
     assert r.m.state == AVOID
     r.send("on_avoidance_cmd", 0.0, 0.5)
     r.wait(0.1)
@@ -181,7 +194,7 @@ def test_avoidance_cmd_forwarded_only_in_avoid(r):
 def test_avoidance_failed_says_obstacle_and_drives(r):
     rid = r.to_classify()
     r.send("on_detect_result", {"id": rid, "kind": "unknown"})
-    r.wait(1.5)
+    r.wait(2.1)
     r.out.clear()
     r.send("on_avoidance_result", "failed")
     assert r.m.state == DRIVE
@@ -193,7 +206,7 @@ def test_avoidance_failed_says_obstacle_and_drives(r):
 def test_avoidance_timeout_cancels_and_fails(r):
     rid = r.to_classify()
     r.send("on_detect_result", {"id": rid, "kind": "unknown"})
-    r.wait(1.5)
+    r.wait(2.1)
     r.out.clear()
     r.wait(10.0)
     assert r.sent("/avoidance/cancel") == [None]
@@ -250,6 +263,14 @@ def test_person_walks_away_cancels_password(r):
     r.wait(0.2)
     assert r.m.state == DRIVE
     assert r.sent("/password/cancel") == [None]
+
+
+def test_cancelled_from_an_old_session_is_ignored(r):
+    # We only cancel on leaving CHECKPOINT, so this belongs to an old session
+    r.to_checkpoint()
+    r.send("on_password_result", "cancelled")
+    assert r.m.state == CHECKPOINT
+    assert r.sent("/telegram/alert") == []
 
 
 def test_password_stuck_goes_to_operator(r):
@@ -323,19 +344,27 @@ def test_back_held_overrides_checkpoint(r):
 def test_back_held_overrides_avoid(r):
     rid = r.to_classify()
     r.send("on_detect_result", {"id": rid, "kind": "unknown"})
-    r.wait(1.5)
+    r.wait(2.1)
     r.gesture = "back"
     r.wait(1.2)
     assert r.m.state == DRIVE
     assert r.sent("/avoidance/cancel") == [None]
 
 
-def test_back_held_before_the_state_counts_from_entry(r):
+def test_reversing_into_a_person_never_skips_the_password(r):
+    # Reversing in DRIVE isn't an override: the operator must release `back`
     r.gesture = "back"
     r.wait(2.0)
     r.to_checkpoint()
-    r.wait(0.5)
+    r.wait(3.0)
     assert r.m.state == CHECKPOINT
+    assert r.sent("/password/cancel") == []
+    r.gesture = "none"
+    r.wait(0.1)
+    r.gesture = "back"
+    r.wait(1.2)
+    assert r.m.state == DRIVE
+    assert r.sent("/password/cancel") == [None]
 
 
 def test_back_broken_by_another_gesture_restarts_the_hold(r):
