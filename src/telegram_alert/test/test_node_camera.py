@@ -130,3 +130,19 @@ def test_cv_bridge_never_converts_colours(node, monkeypatch):
         frame(node, encoding)
         node.snapshot()
     assert set(FakeBridge.used) == {"passthrough"}
+
+
+def test_recordings_go_with_the_next_alert_and_are_deleted(node, monkeypatch, tmp_path):
+    # D32: password_node saves the failed answers and sends their paths
+    from telegram_alert import voice
+    monkeypatch.setattr(voice, "to_voice", lambda wav: ("voice", b"ogg:" + wav))
+    paths = []
+    for i in (1, 2):
+        path = tmp_path / ("%d.wav" % i)
+        path.write_bytes(b"wav%d" % i)
+        paths.append(path)
+        node.on_recording(SimpleNamespace(data=str(path)))
+    node.on_recording(SimpleNamespace(data=str(tmp_path / "gone.wav")))  # skipped
+    assert node.take_recordings() == [("voice", b"ogg:wav1"), ("voice", b"ogg:wav2")]
+    assert not any(p.exists() for p in paths)
+    assert node.take_recordings() == []  # used once

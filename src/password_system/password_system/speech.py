@@ -29,6 +29,7 @@ class ListenResult:
     kind: str                      # "speech" | "no_speech" | "error"
     candidates: List[str] = field(default_factory=list)
     error: str = ""
+    wav: bytes = b""               # the answer as heard, for the operator (D32)
 
 
 def google_candidates(response) -> List[str]:
@@ -119,10 +120,11 @@ class SpeechListener:
         except Exception as e:  # mic missing or busy (OSError, AttributeError, ...)
             return ListenResult("error", error="microphone: %r" % e)
 
+        wav = audio.get_wav_data(convert_rate=16000, convert_width=2)
         try:
-            return ListenResult("speech", self.transcribe(audio))
+            return ListenResult("speech", self.transcribe(audio), wav=wav)
         except sr.UnknownValueError:
-            return ListenResult("speech", [])
+            return ListenResult("speech", [], wav=wav)
         except Exception as e:  # RequestError, no flac binary, ...
             return ListenResult("error", error="speech engine: %r" % e)
 

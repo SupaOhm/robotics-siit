@@ -7,10 +7,13 @@ Follows docs/interfaces.md (contract v0.3, D9, D23, D24, D27):
                                     ("" = nobody spoke)
   pub  /password/result     String  "granted" | "denied" | "cancelled", once per session
   pub  /audio/play          String  password_prompt / password_wrong / password_denied
+  pub  /password/recording  String  path of a WAV of one failed answer, only
+                                    when the session is denied (D32)
 
 The password is not in the repo: ROBOT_PASSWORD_HASH (printed by
 make_password_hash) comes from the environment unless the parameter is set.
-What the person says is never published or logged.
+What the person says is never logged. Failed answers are recorded for the
+operator only if the session is denied; a correct answer is never saved.
 
 In "mic" mode a worker thread runs the listen -> transcribe -> check loop,
 waiting ``listen_delay`` seconds before each attempt so the robot's own
@@ -19,11 +22,13 @@ prompt clip is not recorded.
 
 import os
 import threading
+import time
 
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Empty, String
 
+from .recordings import AttemptRecordings
 from .verifier import PasswordVerifier, outputs_for, parse_stored
 
 
@@ -46,6 +51,7 @@ class PasswordNode(Node):
         p("operation_timeout", 10.0)
         p("energy_threshold", 0.0)  # mic loudness that counts as speech; 0 = calibrate at startup
         p("sim_timeout", 8.5)  # sim: no typed attempt this long -> silence; 0 = off
+        p("recording_dir", "/tmp/password_attempts")  # failed answers for Telegram (D32)
 
         g = lambda name: self.get_parameter(name).value
         stored = g("password_hash") or os.environ.get("ROBOT_PASSWORD_HASH", "")
@@ -68,12 +74,15 @@ class PasswordNode(Node):
         # previous session's worker to let go of the microphone.
         self.max_listen = (float(g("listen_timeout")) + float(g("phrase_time_limit"))
                            + float(g("operation_timeout")) + 2.0)
+        self.recordings = AttemptRecordings()
+        self.recording_dir = os.path.expanduser(g("recording_dir"))
         self.lock = threading.Lock()
         self._cancel = threading.Event()
         self._worker = None
 
         self.result_pub = self.create_publisher(String, "/password/result", 10)
         self.audio_pub = self.create_publisher(String, "/audio/play", 10)
+        self.recording_pub = self.create_publisher(String, "/password/recording", 10)
         self.create_subscription(Empty, "/password/start", self.on_start, 10)
         self.create_subscription(Empty, "/password/cancel", self.on_cancel, 10)
 
@@ -124,8 +133,22 @@ class PasswordNode(Node):
         for result in results:
             self.result_pub.publish(String(data=result))
 
+    def publish_recordings(self, clips) -> None:
+        """Save a denied session's failed answers and publish their paths,
+        before /password/result, so telegram_node has them for the alert."""
+        if not clips:
+            return
+        os.makedirs(self.recording_dir, exist_ok=True)
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        for i, wav in enumerate(clips, 1):
+            path = os.path.join(self.recording_dir, "%s_%d.wav" % (stamp, i))
+            with open(path, "wb") as f:
+                f.write(wav)
+            self.recording_pub.publish(String(data=path))
+
     def on_start(self, _msg) -> None:
         with self.lock:
+            self.recordings.clear()
             self._cancel.set()  # stop any session still running
             self._cancel = threading.Event()
             # One result per session: close the old one before starting again
@@ -142,6 +165,7 @@ class PasswordNode(Node):
 
     def on_cancel(self, _msg) -> None:
         with self.lock:
+            self.recordings.clear()
             self._cancel.set()
             self.publish(self.verifier.cancel())
             self._arm_sim_timer()
@@ -196,7 +220,9 @@ class PasswordNode(Node):
                     return
                 if result.kind == "error":
                     self.get_logger().warning(result.error)
-                self.publish(self.verifier.handle(result))
+                events = self.verifier.handle(result)
+                self.publish_recordings(self.recordings.handle(result.wav, events))
+                self.publish(events)
                 if not self.verifier.active:
                     return
 

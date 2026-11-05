@@ -5,6 +5,8 @@ Follows docs/interfaces.md (contract v0.3, D11, D14, D15, D26):
   sub  /telegram/blocking  String  new alert id: Deny or 30 s timeout happened;
                                    expire Allow / Deny, send Resume
   sub  /robot/state        String  leaving WAIT_OPERATOR / BLOCKING closes old buttons
+  sub  /password/recording String  WAV path of a failed password answer; sent
+                                   with the next alert, then deleted (D32)
   sub  <image_topic>       Image   latest camera frame, used for the photo
   pub  /telegram/decision  String  JSON {"id": "a3", "decision": "allow"|"deny"|"resume"}
 
@@ -15,6 +17,7 @@ main thread. ROS callbacks hand work to the bot with run_coroutine_threadsafe.
 
 import asyncio
 import json
+import os
 import threading
 import time
 
@@ -25,10 +28,12 @@ from rclpy.serialization import deserialize_message
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
 
+from . import voice
 from .bot import AlertBot
 from .settings import load_settings
 
 MAX_PENDING = 10  # messages kept while the bot is still connecting
+MAX_RECORDINGS = 3  # one session's failed answers (max_attempts)
 # Camera encoding -> cv2 colour conversion to BGR. Not cv_bridge's own: under
 # NumPy 2 it segfaults, which no except can catch, and the alert dies with the node.
 TO_BGR = {
@@ -56,6 +61,7 @@ class TelegramNode(Node):
 
         self._last_image = None  # (serialized Image bytes, monotonic time received)
         self._robot_state = None
+        self._recordings = []  # WAV paths from password_node, for the next alert
         self.loop = None
         self._pending = []  # coroutine factories waiting for the bot to connect
         self._pending_lock = threading.Lock()
@@ -64,6 +70,7 @@ class TelegramNode(Node):
         self.create_subscription(String, "/telegram/alert", self.on_alert, 10)
         self.create_subscription(String, "/telegram/blocking", self.on_blocking, 10)
         self.create_subscription(String, "/robot/state", self.on_robot_state, 10)
+        self.create_subscription(String, "/password/recording", self.on_recording, 10)
         # raw=True: keep the bytes and only deserialize the frame an alert needs
         self.create_subscription(Image, g("image_topic"), self.on_image,
                                  qos_profile_sensor_data, raw=True)
@@ -76,6 +83,26 @@ class TelegramNode(Node):
 
     def on_image(self, raw: bytes) -> None:
         self._last_image = (raw, time.monotonic())
+
+    def on_recording(self, msg) -> None:
+        self._recordings.append(msg.data.strip())
+        del self._recordings[:-MAX_RECORDINGS]
+
+    def take_recordings(self):
+        """The waiting answers as (kind, bytes) for Telegram. Each file is
+        read once and deleted: it holds a person's voice."""
+        out = []
+        paths, self._recordings = self._recordings, []
+        for path in paths:
+            try:
+                with open(path, "rb") as f:
+                    wav = f.read()
+                os.remove(path)
+            except OSError as e:
+                self.get_logger().warning("recording %s skipped: %s" % (path, e))
+                continue
+            out.append(voice.to_voice(wav))
+        return out
 
     def snapshot(self):
         """(jpeg bytes or None, note for the caption)."""
@@ -122,8 +149,10 @@ class TelegramNode(Node):
             self.get_logger().warning("empty alert id ignored")
             return
         jpeg, note = self.snapshot()
-        self.get_logger().info("alert %s (photo: %s)" % (alert_id, "yes" if jpeg else "no"))
-        self.submit(lambda: self.bot.alert(alert_id, jpeg, note))
+        voices = self.take_recordings()
+        self.get_logger().info("alert %s (photo: %s, answers: %d)"
+                               % (alert_id, "yes" if jpeg else "no", len(voices)))
+        self.submit(lambda: self.bot.alert(alert_id, jpeg, note, voices))
 
     def on_blocking(self, msg) -> None:
         alert_id = msg.data.strip()

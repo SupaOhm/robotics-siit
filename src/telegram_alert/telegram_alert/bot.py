@@ -7,7 +7,7 @@ node and the laptop demo both use it.
 
 import asyncio
 import time
-from typing import Callable, Iterable, Optional
+from typing import Callable, Iterable, Optional, Sequence, Tuple
 
 from .alert_book import AlertBook, Card, Close
 
@@ -75,8 +75,10 @@ class AlertBot:
 
     # ----- state machine -> Telegram -------------------------------------
 
-    async def alert(self, alert_id: str, jpeg: Optional[bytes] = None, note: str = "") -> None:
-        """Photo of the person with Allow / Deny buttons."""
+    async def alert(self, alert_id: str, jpeg: Optional[bytes] = None, note: str = "",
+                    voices: Sequence[Tuple[str, bytes]] = ()) -> None:
+        """Photo of the person with Allow / Deny buttons, then the failed
+        password answers as replies to it (D32): ("voice" | "document", bytes)."""
         async with self._lock:
             closes, card = self.book.new_alert(alert_id, _clock())
             await self._close(closes)
@@ -86,6 +88,8 @@ class AlertBot:
             if note:
                 card.text += "\n" + note
             await self._show(card, jpeg)
+            if card.message_id is not None:
+                await self._send_voices(card, voices)
 
     async def blocking(self, alert_id: str) -> None:
         """Deny or timeout happened: expire Allow / Deny, offer Resume."""
@@ -160,6 +164,23 @@ class AlertBot:
                       "can't be removed later" % (card.kind, card.alert_id))
         elif msg is not None:
             card.message_id = msg.message_id
+
+    async def _send_voices(self, card: Card, voices) -> None:
+        """Each answer once, as a reply to the card; a failure skips it."""
+        chat = self.settings.chat_id
+        for i, (kind, data) in enumerate(voices, 1):
+            caption = "Answer %d of alert %s" % (i, card.alert_id)
+            if kind == "voice":
+                sent = await self._call("send voice", lambda: self.bot.send_voice(
+                    chat_id=chat, voice=data, caption=caption,
+                    reply_to_message_id=card.message_id), retry_timeouts=False)
+            else:
+                sent = await self._call("send voice file", lambda: self.bot.send_document(
+                    chat_id=chat, document=data, filename="answer_%d.wav" % i,
+                    caption=caption, reply_to_message_id=card.message_id),
+                    retry_timeouts=False)
+            if sent is None:
+                self.warn("alert %s: answer %d voice not sent" % (card.alert_id, i))
 
     async def _close(self, closes: Iterable[Close]) -> None:
         """Edit each card's text; leaving out reply_markup removes the buttons."""
