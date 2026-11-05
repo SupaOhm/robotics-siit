@@ -48,10 +48,14 @@ must be (`energy_threshold`), so keep quiet near the robot when it starts.
 The threshold then stays fixed: an adaptive one also rose while the
 person was talking and cut off a softer last digit.
 
-Before each attempt the node waits `listen_delay` (2.5 s), so it doesn't
-record its own prompt clip. The prompt clips must be shorter than that.
-Worst case is 3 attempts of about 14 s each, which fits the state machine's
-60 s `CHECKPOINT` timeout.
+After each prompt the robot counts down ("three, two, one", beep), and the
+mic opens the moment `audio_node` reports that clip done on `/audio/done`,
+so it never records the robot's own voice (D33). Speak right after the
+beep. If no report comes in `countdown_timeout` (10 s), it listens anyway;
+after an engine failure (no new prompt) it waits `listen_delay` (2.5 s).
+Worst case is 3 attempts of about 18 s each (prompt, 3.2 s countdown, 6 s
+silence or a 5 s answer, transcription), which still fits the state
+machine's 60 s `CHECKPOINT` timeout.
 
 In sim mode, no typed attempt within `sim_timeout` (8.5 s) counts as
 silence, so sim timing matches the robot. If `/password/start` arrives

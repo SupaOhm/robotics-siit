@@ -6,7 +6,9 @@ Follows docs/interfaces.md (contract v0.3, D9, D23, D24, D27):
   sub  /password/sim_input  String  one typed attempt, input_mode == "sim" only
                                     ("" = nobody spoke)
   pub  /password/result     String  "granted" | "denied" | "cancelled", once per session
-  pub  /audio/play          String  password_prompt / password_wrong / password_denied
+  pub  /audio/play          String  password_prompt / password_wrong / password_denied,
+                                    then password_countdown before each listen
+  sub  /audio/done          String  a clip finished; password_countdown opens the mic (D33)
   pub  /password/recording  String  JSON {"path": WAV of one failed answer,
                                     "heard": transcript}, only when the
                                     session is denied (D32)
@@ -16,9 +18,10 @@ make_password_hash) comes from the environment unless the parameter is set.
 What the person says is never logged. Failed answers are recorded for the
 operator only if the session is denied; a correct answer is never saved.
 
-In "mic" mode a worker thread runs the listen -> transcribe -> check loop,
-waiting ``listen_delay`` seconds before each attempt so the robot's own
-prompt clip is not recorded.
+In "mic" mode a worker thread runs the listen -> transcribe -> check loop.
+Each attempt starts the moment audio_node reports the "3, 2, 1" countdown
+clip done, so the robot's own voice is never recorded (D33). Without that
+report in ``countdown_timeout`` (audio node down) it listens anyway.
 """
 
 import json
@@ -31,7 +34,7 @@ from rclpy.node import Node
 from std_msgs.msg import Empty, String
 
 from .recordings import AttemptRecordings, delete_old_recordings
-from .verifier import PasswordVerifier, outputs_for, parse_stored
+from .verifier import COUNTDOWN_CLIP, PasswordVerifier, outputs_for, parse_stored
 
 
 class PasswordNode(Node):
@@ -49,7 +52,8 @@ class PasswordNode(Node):
         p("vosk_model_path", "")
         p("vosk_free_speech", False)  # hear any English, not only digits and vosk_words
         p("vosk_words", "")  # extra words Vosk may hear, e.g. a word password; set on the robot only
-        p("listen_delay", 2.5)
+        p("listen_delay", 2.5)  # before a retry with no countdown (engine failure)
+        p("countdown_timeout", 10.0)  # no /audio/done for the countdown -> listen anyway
         p("listen_timeout", 6.0)
         p("phrase_time_limit", 5.0)
         p("operation_timeout", 10.0)
@@ -74,6 +78,9 @@ class PasswordNode(Node):
             max_service_errors=int(g("max_service_errors")),
         )
         self.listen_delay = float(g("listen_delay"))
+        self.countdown_timeout = float(g("countdown_timeout"))
+        self._countdown_done = threading.Event()
+        self._countdown_pending = False
         # Longest a listen + transcription can take; used to wait for the
         # previous session's worker to let go of the microphone.
         self.max_listen = (float(g("listen_timeout")) + float(g("phrase_time_limit"))
@@ -89,6 +96,7 @@ class PasswordNode(Node):
         self.recording_pub = self.create_publisher(String, "/password/recording", 10)
         self.create_subscription(Empty, "/password/start", self.on_start, 10)
         self.create_subscription(Empty, "/password/cancel", self.on_cancel, 10)
+        self.create_subscription(String, "/audio/done", self.on_audio_done, 10)
 
         self.mode = g("input_mode")
         self.listener = None
@@ -134,6 +142,9 @@ class PasswordNode(Node):
             self.get_logger().info("%s (attempts left %d)"
                                    % (ev.type.value, ev.attempts_left))
         results, clips = outputs_for(events)
+        if COUNTDOWN_CLIP in clips:
+            self._countdown_done.clear()  # before asking, so its done can't be missed
+            self._countdown_pending = True
         for clip in clips:
             self.audio_pub.publish(String(data=clip))
         for result in results:
@@ -151,6 +162,25 @@ class PasswordNode(Node):
             with open(path, "wb") as f:
                 f.write(wav)
             self.recording_pub.publish(String(data=json.dumps({"path": path, "heard": heard})))
+
+    def on_audio_done(self, msg) -> None:
+        if msg.data == COUNTDOWN_CLIP:
+            self._countdown_done.set()
+
+    def wait_to_listen(self, cancel) -> bool:
+        """Block until the mic should open: the countdown clip just ended,
+        or ``listen_delay`` after an engine failure. False if cancelled."""
+        if not self._countdown_pending:
+            return not cancel.wait(self.listen_delay)
+        self._countdown_pending = False
+        deadline = time.monotonic() + self.countdown_timeout
+        while not cancel.is_set():
+            if self._countdown_done.wait(0.02):
+                return True
+            if time.monotonic() >= deadline:
+                self.get_logger().warning("no /audio/done for the countdown, listening anyway")
+                return True
+        return False
 
     def on_start(self, _msg) -> None:
         with self.lock:
@@ -211,7 +241,7 @@ class PasswordNode(Node):
                 return
             self.publish(started)  # prompt now that the mic is free
 
-        while not cancel.wait(self.listen_delay):
+        while self.wait_to_listen(cancel):
             with self.lock:
                 if cancel.is_set() or not self.verifier.active:
                     return

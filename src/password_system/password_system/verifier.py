@@ -56,6 +56,11 @@ class Event:
     attempts_left: int
 
 
+# "Three, two, one" and a beep after every prompt; the mic opens when it
+# ends (/audio/done), so the robot's own voice is never recorded (D33)
+COUNTDOWN_CLIP = "password_countdown"
+
+
 def outputs_for(events) -> Tuple[List[str], List[str]]:
     """(results, clips) to publish for one batch of events. The last failure
     plays only "password_denied", not "password_wrong" first."""
@@ -64,6 +69,8 @@ def outputs_for(events) -> Tuple[List[str], List[str]]:
     clips = [CLIP_FOR_EVENT[t] for t in types if t in CLIP_FOR_EVENT]
     if EventType.LOCKED_OUT in types:
         clips = [c for c in clips if c != "password_wrong"]
+    elif clips:  # asked again: count down to the listen
+        clips.append(COUNTDOWN_CLIP)
     return results, clips
 
 
