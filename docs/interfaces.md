@@ -183,7 +183,7 @@ topic is never used on the robot.
   then deletes the files (D32).
 
 - The state machine ignores a decision whose `id` isn't the current alert.
-- The 30 s timeout is in the state machine (D15), so the Telegram node
+- The 40 s timeout is in the state machine (D15), so the Telegram node
   learns of it from `/telegram/blocking`. On that message it removes the
   old **Allow** / **Deny** buttons and replies "expired" if nobody pressed
   them. On `allow`, `deny` or `resume` it removes the buttons it just used.
@@ -214,7 +214,7 @@ DRIVE ─obstacle appears─► CLASSIFY ─object / unknown─► ANNOUNCE ─�
                           ▼
                     WAIT_OPERATOR ─allow─► PASS
                           │
-                 deny / 30 s timeout
+                 deny / 40 s timeout
                           ▼
                       BLOCKING ─resume / hold back─► AVOID
 ```
@@ -226,7 +226,7 @@ DRIVE ─obstacle appears─► CLASSIFY ─object / unknown─► ANNOUNCE ─�
 | `ANNOUNCE` | Stopped | Clip requested, short pause |
 | `CHECKPOINT` | Stopped | `/password/result`; path clear for 5 s → `/password/cancel`, `DRIVE`; no result in 60 s → `/password/cancel`, `WAIT_OPERATOR` |
 | `PASS` | Stopped | Plays `password_correct` (after `granted`) or `operator_allowed` (after `allow`), short pause; starts the 20 s cleared window |
-| `WAIT_OPERATOR` | Stopped | `allow` / `deny` for the current alert id, or 30 s. `resume` is ignored here |
+| `WAIT_OPERATOR` | Stopped | `allow` / `deny` for the current alert id, or 40 s. `resume` is ignored here |
 | `BLOCKING` | Stopped, `alert` and `blocking` repeat | `resume` for the current alert id, or `back` held 1 s → `AVOID` |
 | `AVOID` | `/avoidance/cmd_vel` | `/avoidance/result`; none in 10 s → `/avoidance/cancel`, then handled as `failed` |
 

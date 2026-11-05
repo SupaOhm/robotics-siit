@@ -49,7 +49,7 @@ class Settings:
     cleared_window: float = 20.0    # after PASS a person counts as unknown (D12)
     checkpoint_clear: float = 5.0   # path clear this long -> person left (D29)
     checkpoint_timeout: float = 60.0  # no /password/result (D30)
-    operator_timeout: float = 30.0  # no Telegram decision (D15)
+    operator_timeout: float = 40.0  # no Telegram decision (D15)
     blocking_repeat: float = 3.0    # alert + blocking clips
     back_hold: float = 1.0          # `back` held this long -> override (D11)
     avoid_timeout: float = 10.0     # no /avoidance/result (D30)

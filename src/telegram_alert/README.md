@@ -3,7 +3,7 @@
 `telegram_node`: when a person fails the spoken password 3 times, the state
 machine asks this node to send the operator a **photo of the person** on
 Telegram with **Allow** / **Deny** buttons. The operator's answer goes back
-to the state machine. If nobody answers in 30 s, the robot keeps blocking,
+to the state machine. If nobody answers in 40 s, the robot keeps blocking,
 and the node offers a **Resume** button to end the block.
 
 This follows the contract in `docs/interfaces.md` (v0.3: D11, D14, D15,
@@ -15,16 +15,16 @@ is needed.
 | Topic | Type | Direction | Meaning |
 |---|---|---|---|
 | `/telegram/alert` | `std_msgs/String` | in | Alert id, e.g. `a3`. Play the countdown, then send the latest camera frame with **Allow** / **Deny** |
-| `/telegram/blocking` | `std_msgs/String` | in | A **new** alert id. Deny or 30 s timeout happened: send "Robot is blocking" with **Resume** |
+| `/telegram/blocking` | `std_msgs/String` | in | A **new** alert id. Deny or 40 s timeout happened: send "Robot is blocking" with **Resume** |
 | `/telegram/decision` | `std_msgs/String` (JSON) | out | `{"id": "a3", "decision": "allow"}`. `decision` is `allow`, `deny` or `resume` |
 | `/robot/state` | `std_msgs/String` | in | Leaving `WAIT_OPERATOR` or `BLOCKING` (e.g. the operator held `back`) closes that state's buttons |
 | `/audio/play` | `std_msgs/String` | out | `photo_countdown`, played on each alert |
 | `/password/recording` | `std_msgs/String` (JSON) | in | `{"path", "heard"}`: a failed password answer. Sent with the next alert as a voice reply to its card, captioned with what was heard, then deleted (D32). Needs `ffmpeg` for voice messages; without it the WAV goes as a file |
 | `/camera/image_raw` | `sensor_msgs/Image` | in | Camera frames. Only the latest is kept, as raw bytes; it is decoded only when an alert comes in |
 
-**The 30 s timeout is in the state machine (D15), not here.** When it runs
+**The 40 s timeout is in the state machine (D15), not here.** When it runs
 out, the state machine sends `/telegram/blocking`. This node then removes
-the old Allow / Deny buttons and marks that message "⌛ No answer in 30 s:
+the old Allow / Deny buttons and marks that message "⌛ No answer in 40 s:
 treated as Deny".
 
 What the operator sees:

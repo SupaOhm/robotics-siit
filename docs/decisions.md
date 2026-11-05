@@ -30,7 +30,7 @@ bring-up checklist is in [robot-setup.md](robot-setup.md).
 | D12 | Don't ask the same person twice | After a pass, a `person` counts as a plain obstacle for **20 s** (tune on the robot). Known gap: a second person within 20 s isn't checked | Face matching (lookalikes, heavy); no skip at all; skip until the sensor reads clear | 1 |
 | D13 | After a person is cleared | Turn away with Lane 3's avoidance | Wait until they leave; hand back to the operator | 1, 3 |
 | D14 | Operator decision after 3 wrong passwords | Telegram **Allow** / **Deny** only. No decision gesture for Lane 2 | Thumbs-up gesture; both | 2, 4 |
-| D15 | Where the 30 s Telegram timeout lives | State machine. Alerts carry an id, decisions are JSON `{id, decision}`; `/telegram/blocking` (new id) tells the Telegram node to expire the old buttons | Telegram node; no ids (an old button acts on a new alert) | 4 |
+| D15 | Where the Telegram timeout (40 s since Nov 5, was 30 s) lives | State machine. Alerts carry an id, decisions are JSON `{id, decision}`; `/telegram/blocking` (new id) tells the Telegram node to expire the old buttons | Telegram node; no ids (an old button acts on a new alert) | 4 |
 | D28 | What starts `CLASSIFY` | Only an obstacle **appearing** (`/obstacle/detected` false → true). `forward` stays blocked while it's true | Any `true` (re-triggers forever after `failed` / `back`) | 1, 3 |
 | D29 | Person walks away during the password | Path clear for 5 s in `CHECKPOINT` → `/password/cancel`, back to `DRIVE` | Wait for the operator | 1, 4 |
 | D30 | Stuck states | `CHECKPOINT` with no result in 60 s → `/password/cancel`, `WAIT_OPERATOR`; `AVOID` with no result in 10 s → `/avoidance/cancel`, `failed` | No timeouts | 1 |

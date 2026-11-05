@@ -299,7 +299,9 @@ def test_decision_for_old_alert_ignored(r):
 
 def test_operator_timeout_blocks_with_new_id(r):
     r.to_wait_operator()
-    r.wait(30.0)
+    r.wait(39.9)
+    assert r.m.state == WAIT_OPERATOR  # 40 s, so the photo countdown leaves time
+    r.wait(0.2)
     assert r.m.state == BLOCKING
     assert r.sent("/telegram/blocking") == ["a2"]
 

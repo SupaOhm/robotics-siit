@@ -187,7 +187,7 @@ def test_alert_plays_the_countdown_and_waits_for_the_photo(waiting):
 
 
 def test_card_shows_the_time_left_after_the_countdown(node):
-    assert node.bot.book.timeout_s == 19  # 30 s - 10.5 s
+    assert node.bot.book.timeout_s == 29  # 40 s - 10.5 s
 
 
 def test_robot_leaving_during_the_countdown_skips_the_card(waiting):

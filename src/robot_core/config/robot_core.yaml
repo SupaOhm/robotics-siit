@@ -15,7 +15,7 @@ state_machine:
     cleared_window: 20.0      # after PASS, a person counts as an obstacle (D12)
     checkpoint_clear: 5.0     # path clear in CHECKPOINT -> person left, DRIVE (D29)
     checkpoint_timeout: 60.0  # no /password/result -> WAIT_OPERATOR (D30)
-    operator_timeout: 30.0    # no Allow / Deny -> BLOCKING (D15)
+    operator_timeout: 40.0    # no Allow / Deny -> BLOCKING (D15); the photo countdown takes ~10 s of it
     blocking_repeat: 3.0      # alert + blocking clips in BLOCKING
     back_hold: 1.0            # `back` held -> override (D11)
     avoid_timeout: 10.0       # no /avoidance/result -> cancel, failed (D30)

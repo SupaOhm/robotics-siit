@@ -3,7 +3,7 @@
 Follows docs/interfaces.md (contract v0.3, D11, D14, D15, D26):
   sub  /telegram/alert     String  alert id: play the countdown, then send a photo
                                    with Allow / Deny
-  sub  /telegram/blocking  String  new alert id: Deny or 30 s timeout happened;
+  sub  /telegram/blocking  String  new alert id: Deny or 40 s timeout happened;
                                    expire Allow / Deny, send Resume
   sub  /robot/state        String  leaving WAIT_OPERATOR / BLOCKING closes old buttons
   sub  /password/recording String  JSON {"path", "heard"}: a failed password
@@ -13,7 +13,7 @@ Follows docs/interfaces.md (contract v0.3, D11, D14, D15, D26):
   pub  /telegram/decision  String  JSON {"id": "a3", "decision": "allow"|"deny"|"resume"}
   pub  /audio/play         String  photo_countdown (each alert, each Retake press)
 
-The 30 s timeout is in the state machine; this node only shows it.
+The 40 s timeout is in the state machine; this node only shows it.
 ROS spins in a background thread; the Telegram bot runs on asyncio in the
 main thread. ROS callbacks hand work to the bot with run_coroutine_threadsafe.
 """
@@ -55,7 +55,7 @@ class TelegramNode(Node):
         p("image_topic", "/camera/image_raw")
         p("jpeg_quality", 85)
         p("max_image_age", 2.0)  # older frames are still sent, with a note
-        p("operator_timeout", 30)  # the state machine's WAIT_OPERATOR timeout (text only)
+        p("operator_timeout", 40)  # the state machine's WAIT_OPERATOR timeout (text only)
         p("photo_delay", 10.5)  # /telegram/alert to photo: password_denied + countdown clip
         p("retake_delay", 7.0)  # Retake press to photo: the countdown clip
         p("env_file", "")  # optional .env with TELEGRAM_* (gitignored)
