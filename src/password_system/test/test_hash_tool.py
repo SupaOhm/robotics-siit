@@ -15,6 +15,16 @@ def test_prints_one_line_that_the_verifier_accepts(capsys):
     assert [e.type for e in v.submit(["4 7 1 9"])] == [EventType.GRANTED]
 
 
-def test_rejects_non_digits():
+def test_a_word_password_works(capsys):
+    # D23 changed: a spoken word is allowed (add it to vosk_words on the robot)
+    main(["Hello"])
+    password_hash, salt, chars = parse_stored(
+        capsys.readouterr().out.strip().split("=", 1)[1])
+    v = PasswordVerifier(password_hash, salt, chars)
+    v.start()
+    assert [e.type for e in v.submit(["hello"])] == [EventType.GRANTED]
+
+
+def test_rejects_an_empty_password():
     with pytest.raises(SystemExit):
-        main(["open", "sesame"])
+        main(["!!"])

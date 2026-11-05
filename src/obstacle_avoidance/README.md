@@ -50,14 +50,14 @@ machine, launch with `cmd_vel_topic:=/cmd_vel`.
   the robot's centre line, measured straight ahead. An earlier +-15 degree
   cone was narrower than the robot, and in CoppeliaSim it missed obstacles at
   the robot's shoulders until 0.17 m. Set `corridor_half_width` to half the
-  A1's width plus a margin. Beams with no return (0 from the YDLIDAR driver)
+  M1's width plus a margin. Beams with no return (0 from the YDLIDAR driver)
   are skipped.
 - **Filter:** median of the last 5 readings. NaN and readings under 2 cm
   get dropped. `inf` and anything past 4 m count as 4 m.
 - **Threshold with hysteresis:** blocked at 0.30 m or closer, clear again
   only at 0.40 m or farther. A reading that hovers around 0.30 m does not
   toggle the state.
-- **Turn:** purin checked our A1: it has mecanum wheels and turns in
+- **Turn:** purin checked our M1: it has mecanum wheels and turns in
   place. The node turns at 1 rad/s. Done once the corridor ahead has stayed
   clear (0.40 m) for 0.3 s and the robot has turned at least 30 degrees.
   After 270 degrees it reports `failed`.
@@ -108,8 +108,8 @@ ros2 topic echo /avoidance/result
 ```
 
 Check the Yahboom sensor topic with `ros2 topic list` and set `scan_topic`
-or `range_topic` to match. If the LiDAR's 0 degree points backward, set
-`front_angle_deg: 180.0`.
+or `range_topic` to match. The M1's LiDAR 0 degree points backward, so the
+yaml sets `front_angle_deg: 180.0`. Use 0.0 on a robot whose LiDAR faces forward.
 
 The node subscribes to the sensor and the IMU with `qos_profile_sensor_data`
 (best effort), which hears both best-effort and reliable publishers.
@@ -166,6 +166,20 @@ The topic contract lives in `docs/interfaces.md` (D5 for this package).
 
 ## Open questions
 
-1. LiDAR or ultrasonic? D19 says LiDAR if the A1 has one; confirmed at bring-up
-2. Stop and clear distances: 0.30 / 0.40 m are first guesses. Tune them on
-   the robot with the demo obstacles.
+1. LiDAR or ultrasonic? D19 says LiDAR if the M1 has one; confirmed at bring-up
+2. Stop and clear distances: 0.30 / 0.40 m from the LiDAR. On the M1 the
+   LiDAR is about level with the front bumper (wall test), so the robot
+   stops about 0.30 m from the bumper, less what it rolls. It stopped
+   before a box on the robot; the gap left is still to measure.
+
+## Limitations
+
+- **Low objects:** on the M1 the LiDAR beam is about 16 cm above the floor
+  (Yahboom's drawing puts the top of the LiDAR at 181.4 mm). Anything lower,
+  such as a cup, or a laptop on the floor, never stops the robot, so the
+  detector never gets to name it. Use objects taller than 16 cm in the demo.
+- **Clear and dark surfaces:** clear plastic and matt black can return no
+  reading. On the robot the beam went through a clear Crystal bottle 0.3 m
+  ahead and read 0.60 m.
+- **Front only:** the robot stops for what is ahead. Backing up (`back`)
+  has no obstacle check.

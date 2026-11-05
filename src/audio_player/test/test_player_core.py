@@ -500,3 +500,29 @@ def test_ros_logger_severity_and_worker_recovery(clips, monkeypatch):
 
     finally:
         player.close()
+
+
+def test_finished_clips_are_reported_in_order(clips, monkeypatch):
+    # D33: password_node opens the mic when its countdown clip is done
+    monkeypatch.setattr(AudioPlayer, "_play_file", lambda self, path: False)
+    done = []
+    player = AudioPlayer(clip_dir=clips, on_done=done.append)
+    try:
+        assert player.request("password_prompt")
+        assert player.request("found_chair")
+        assert player.wait_until_idle(timeout=3)
+        assert done == ["password_prompt", "found_chair"]
+    finally:
+        player.close()
+
+
+def test_interrupted_clip_is_not_reported_as_done(clips, monkeypatch):
+    monkeypatch.setattr(AudioPlayer, "_play_file", lambda self, path: True)
+    done = []
+    player = AudioPlayer(clip_dir=clips, on_done=done.append)
+    try:
+        assert player.request("password_prompt")
+        assert player.wait_until_idle(timeout=3)
+        assert done == []
+    finally:
+        player.close()

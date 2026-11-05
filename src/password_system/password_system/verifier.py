@@ -32,7 +32,7 @@ class EventType(str, Enum):
     CANCELLED = "cancelled"        # stopped from outside (e.g. person left)
 
 
-MATCH_MODES = ("contains", "exact")
+MATCH_MODES = ("contains", "exact", "first")
 
 # What the state machine reads on /password/result (docs/interfaces.md)
 RESULT_FOR_EVENT = {
@@ -56,6 +56,13 @@ class Event:
     attempts_left: int
 
 
+# "Three, two, one" and a beep after every prompt. The mic opens the moment
+# the beep ends (/audio/done), so the beep means "speak now" and the robot's
+# own voice is never recorded (D33)
+COUNTDOWN_CLIP = "password_countdown"
+LISTEN_CLIP = "password_beep"
+
+
 def outputs_for(events) -> Tuple[List[str], List[str]]:
     """(results, clips) to publish for one batch of events. The last failure
     plays only "password_denied", not "password_wrong" first."""
@@ -64,6 +71,8 @@ def outputs_for(events) -> Tuple[List[str], List[str]]:
     clips = [CLIP_FOR_EVENT[t] for t in types if t in CLIP_FOR_EVENT]
     if EventType.LOCKED_OUT in types:
         clips = [c for c in clips if c != "password_wrong"]
+    elif clips:  # asked again: count down to the listen
+        clips += [COUNTDOWN_CLIP, LISTEN_CLIP]
     return results, clips
 
 
@@ -144,10 +153,14 @@ class PasswordVerifier:
         return hmac.compare_digest(hash_password(normalized, self._salt), self._hash)
 
     def matches(self, text: str) -> bool:
-        """True if ``text`` is (or, in contains mode, includes) the password."""
+        """True if ``text`` is the password (exact), includes it (contains),
+        or starts with it (first: the first N characters heard, N = the
+        password's length, so "seven seven" passes a 1-digit 7)."""
         heard = normalize(text)
         if self.match_mode == "exact":
             return self._is_hit(heard)
+        if self.match_mode == "first":
+            return self._is_hit(heard[:self.password_chars])
         n = self.password_chars
         return any(self._is_hit(heard[i:i + n]) for i in range(len(heard) - n + 1))
 

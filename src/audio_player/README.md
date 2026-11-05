@@ -21,6 +21,10 @@ The message contains a clip ID without the `.wav` extension.
 
 Example: `found_chair`
 
+When a clip finishes (not when interrupted), the node publishes its id on
+`/audio/done` (`std_msgs/String`). `password_node` opens the mic on
+`password_beep` (D33).
+
 ## Available Clips
 
 - found_chair
@@ -32,7 +36,10 @@ Example: `found_chair`
 - found_obstacle
 - password_prompt
 - password_wrong
+- password_countdown ("three, two, one")
+- password_beep (password_node opens the mic as it ends)
 - password_denied
+- photo_countdown
 - password_correct
 - operator_allowed
 - alert
@@ -72,7 +79,7 @@ and a configured audio output device.
 ## Status
 
 - Windows WAV playback: tested
-- Queue / cooldown / alert priority / logging: 11 unit tests passed on Ubuntu
+- Queue / cooldown / alert priority / logging: 12 unit tests passed on Ubuntu
 - ROS 2 Humble build and launch: tested in Ubuntu VM
 - ROS logging through /rosout: tested
 - Backpack, laptop and cup audio: played successfully in Ubuntu VM

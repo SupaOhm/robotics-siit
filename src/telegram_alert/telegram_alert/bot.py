@@ -7,15 +7,15 @@ node and the laptop demo both use it.
 
 import asyncio
 import time
-from typing import Callable, Iterable, Optional
+from typing import Callable, Iterable, Optional, Sequence, Tuple
 
 from .alert_book import AlertBook, Card, Close
 
 TRIES = 3
 TIMED_OUT = object()  # _call result: a send timed out and may have been delivered
-# Upload limit for the photo (the library's default is 20 s). A camera JPEG is
-# ~50 KB; if it times out, the text fallback still reaches the operator early
-# in the 30 s window.
+# Limit on each network write of the photo upload (the library's default is
+# 20 s), not on the whole send. A camera JPEG is ~50 KB, so a stalled upload
+# normally times out early in the 30 s window, and the text fallback follows.
 PHOTO_WRITE_TIMEOUT = 8.0
 
 
@@ -34,10 +34,12 @@ class AlertBot:
     def __init__(self, settings, on_decision: Callable[[dict], None],
                  log: Callable[[str], None] = print,
                  warn: Optional[Callable[[str], None]] = None,
-                 bot=None, timeout_s: int = 30):
+                 bot=None, timeout_s: int = 30,
+                 on_retake: Optional[Callable[[Card], None]] = None):
         self.settings = settings
         self.book = AlertBook(settings.allowed_users, timeout_s)
         self.on_decision = on_decision
+        self.on_retake = on_retake
         self.log = log
         self.warn = warn or log
         self.app = None
@@ -75,8 +77,11 @@ class AlertBot:
 
     # ----- state machine -> Telegram -------------------------------------
 
-    async def alert(self, alert_id: str, jpeg: Optional[bytes] = None, note: str = "") -> None:
-        """Photo of the person with Allow / Deny buttons."""
+    async def alert(self, alert_id: str, jpeg: Optional[bytes] = None, note: str = "",
+                    voices: Sequence[Tuple[str, bytes, str]] = ()) -> None:
+        """Photo of the person with Allow / Deny buttons, then the failed
+        password answers as replies to it (D32):
+        ("voice" | "document", bytes, what the speech engine heard)."""
         async with self._lock:
             closes, card = self.book.new_alert(alert_id, _clock())
             await self._close(closes)
@@ -86,6 +91,8 @@ class AlertBot:
             if note:
                 card.text += "\n" + note
             await self._show(card, jpeg)
+            if card.message_id is not None:
+                await self._send_voices(card, voices)
 
     async def blocking(self, alert_id: str) -> None:
         """Deny or timeout happened: expire Allow / Deny, offer Resume."""
@@ -102,6 +109,23 @@ class AlertBot:
         async with self._lock:
             await self._close(self.book.state_changed(old, new))
 
+    async def retake(self, card: Card, jpeg: Optional[bytes], note: str = "") -> None:
+        """Put a new photo on an open card. If that fails, the old one stays.
+        Allow or Deny during the countdown closed the card: nothing to do."""
+        async with self._lock:
+            card.retaking = False
+            if not card.open:
+                return
+            text = card.base_text + ("\n" + note if note else "")
+            msg = await self._new_photo(card, jpeg, text) if jpeg is not None else None
+            if msg is TIMED_OUT:
+                self.warn("alert %s: retake timed out; it may still arrive" % card.alert_id)
+            elif msg is None:
+                self.warn("alert %s: retake failed %s" % (card.alert_id, note))
+                await self._edit_keeping_buttons(card, card.text + "\n(retake failed)")
+            else:
+                card.text = text
+
     # ----- Telegram -> state machine -------------------------------------
 
     async def on_button(self, update, context) -> None:
@@ -116,6 +140,8 @@ class AlertBot:
         if result.decision is not None:
             self.on_decision(result.decision)  # first, so the robot reacts at once
             self.log("decision %s" % result.decision)
+        if result.retake is not None and self.on_retake is not None:
+            self.on_retake(result.retake)
         await self._call("answer", lambda: query.answer(result.toast))
         if result.close is not None:
             async with self._lock:
@@ -160,6 +186,55 @@ class AlertBot:
                       "can't be removed later" % (card.kind, card.alert_id))
         elif msg is not None:
             card.message_id = msg.message_id
+
+    async def _send_voices(self, card: Card, voices) -> None:
+        """Each answer once, as a reply to the card; a failure skips it."""
+        chat = self.settings.chat_id
+        for i, (kind, data, heard) in enumerate(voices, 1):
+            caption = "Answer %d of alert %s: %s" % (
+                i, card.alert_id, 'heard "%s"' % heard if heard else "nothing clear heard")
+            if kind == "voice":
+                sent = await self._call("send voice", lambda: self.bot.send_voice(
+                    chat_id=chat, voice=data, caption=caption,
+                    reply_to_message_id=card.message_id), retry_timeouts=False)
+            else:
+                sent = await self._call("send voice file", lambda: self.bot.send_document(
+                    chat_id=chat, document=data, filename="answer_%d.wav" % i,
+                    caption=caption, reply_to_message_id=card.message_id),
+                    retry_timeouts=False)
+            if sent is None:
+                self.warn("alert %s: answer %d voice not sent" % (card.alert_id, i))
+
+    async def _new_photo(self, card: Card, jpeg: bytes, text: str):
+        """Swap the photo on the card. A text card can't take one, so it
+        moves to a new message. Returns what _call returned."""
+        from telegram import InputMediaPhoto
+        chat, markup = self.settings.chat_id, self._markup(card)
+        if card.with_photo:
+            return await self._call("retake photo", lambda: self.bot.edit_message_media(
+                chat_id=chat, message_id=card.message_id, reply_markup=markup,
+                media=InputMediaPhoto(jpeg, caption=text),
+                write_timeout=PHOTO_WRITE_TIMEOUT), retry_timeouts=False)
+        msg = await self._call("retake photo", lambda: self.bot.send_photo(
+            chat_id=chat, photo=jpeg, caption=text, reply_markup=markup,
+            write_timeout=PHOTO_WRITE_TIMEOUT), retry_timeouts=False)
+        if msg is not None and msg is not TIMED_OUT:
+            old_id, card.message_id, card.with_photo = card.message_id, msg.message_id, True
+            if old_id is not None:
+                await self._call("edit message", lambda: self.bot.edit_message_text(
+                    text=card.text + "\n\nNew photo below", chat_id=chat, message_id=old_id))
+        return msg
+
+    async def _edit_keeping_buttons(self, card: Card, text: str) -> None:
+        chat, markup = self.settings.chat_id, self._markup(card)
+        if card.message_id is None:
+            return
+        if card.with_photo:
+            await self._call("edit caption", lambda: self.bot.edit_message_caption(
+                chat_id=chat, message_id=card.message_id, caption=text, reply_markup=markup))
+        else:
+            await self._call("edit message", lambda: self.bot.edit_message_text(
+                text=text, chat_id=chat, message_id=card.message_id, reply_markup=markup))
 
     async def _close(self, closes: Iterable[Close]) -> None:
         """Edit each card's text; leaving out reply_markup removes the buttons."""

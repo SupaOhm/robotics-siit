@@ -1,0 +1,27 @@
+state_machine:
+  ros__parameters:
+    # All times in seconds. Starting points from docs/interfaces.md; tune on the robot.
+    tick_rate: 10.0           # Hz: timeouts are checked and /cmd_vel sent this often
+
+    linear_speed: 0.2         # m/s for forward / back
+    angular_speed: 1.0        # rad/s for left / right
+
+    gesture_timeout: 0.5      # no /gesture/command -> stop (D4)
+    obstacle_timeout: 1.0     # no /obstacle/detected -> forward blocked (D5)
+    avoid_cmd_timeout: 0.5    # stale /avoidance/cmd_vel -> stop
+    detect_timeout: 3.0       # per /detect/request; retried once, then CHECKPOINT (D7)
+    announce_pause: 2.0       # ANNOUNCE -> AVOID; found_* clips run up to 2 s
+    pass_pause: 2.5           # PASS -> AVOID
+    cleared_window: 20.0      # after PASS, a person counts as an obstacle (D12)
+    checkpoint_clear: 5.0     # path clear in CHECKPOINT -> person left, DRIVE (D29)
+    checkpoint_timeout: 60.0  # no /password/result -> WAIT_OPERATOR (D30)
+    operator_timeout: 40.0    # no Allow / Deny -> BLOCKING (D15); the photo countdown takes ~10 s of it
+    blocking_repeat: 3.0      # alert + blocking clips in BLOCKING
+    back_hold: 1.0            # `back` held -> override (D11)
+    avoid_timeout: 10.0       # no /avoidance/result -> cancel, failed (D30)
+    tilt_level: 30.0          # camera tilt (Yahboom s2, 0-110) for driving and the detector (D31)
+    tilt_up: 90.0             # camera tilt in CHECKPOINT / WAIT_OPERATOR / BLOCKING, for the face (D31)
+
+camera_tilt:
+  ros__parameters:
+    pan: 90                   # Yahboom s1, camera facing forward

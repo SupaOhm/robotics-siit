@@ -1,12 +1,16 @@
 # robotics-siit: AI gesture-controlled security robot
 
-A Yahboom RosmasterPi A1 that the operator drives with hand gestures. It
+A Yahboom ROSMASTER M1 that the operator drives with hand gestures. It
 stops at obstacles, names them in English, and checks people at a
 spoken-password checkpoint, alerting the operator on Telegram when a
 password fails.
 
 - **Plan, lanes and timeline:** [PLAN.md](PLAN.md)
 - **How to contribute:** [CONTRIBUTING.md](CONTRIBUTING.md)
+- **ROS contract (topics, payloads, state machine):** [docs/interfaces.md](docs/interfaces.md)
+- **Why it is built this way (D-numbers):** [docs/decisions.md](docs/decisions.md)
+- **Robot bring-up checklist:** [docs/robot-setup.md](docs/robot-setup.md)
+- **Glossary:** [CONTEXT.md](CONTEXT.md)
 
 ## Layout
 
@@ -15,13 +19,18 @@ package under `src/`, created and owned by its lane.
 
 ```
 src/
+  robot_core/         Lane 1, state machine, the only /cmd_vel publisher (state_machine)
+  gesture_control/    Lane 2, hand gestures on the laptop (gesture_node)
+  object_detection/   Lane 2, YOLO object naming (detector_node)
+  audio_player/       Lane 4, spoken clips (audio_node)
   password_system/    Lane 4, spoken password (password_node)
-  obstacle_avoidance/ Lane 3, distance sensor, obstacle threshold, turn-away logic
+  telegram_alert/     Lane 4, operator alerts (telegram_node)
+  obstacle_avoidance/ Lane 3, obstacle stop and turn-away (avoidance_node)
   ...                 other packages are added by their lanes
-docs/                 interface contract, architecture, report
-sim/                  CoppeliaSim scenes
+docs/                 interface contract, decisions, robot setup
+sim/                  CoppeliaSim scenes (Lane 5)
 external/             third-party source kept as git submodules (see below)
-tools/                benchmarks and test scripts (not ROS packages)
+tools/                setup, demo and benchmark scripts (not ROS packages)
 ```
 
 ## External sources
@@ -45,6 +54,10 @@ cd robotics-siit
 colcon build --symlink-install
 source install/setup.bash
 ```
+
+macOS has no official ROS 2 packages. On a Mac, `bash tools/mac_ros_setup.sh`
+installs Humble from RoboStack (conda) and builds `gesture_control` (tested
+on an M1). See [src/gesture_control/README.md](src/gesture_control/README.md).
 
 Keep the logic in plain Python modules and keep the ROS node thin, as
 `password_system` does. Then the tests run on any laptop without ROS:

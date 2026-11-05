@@ -6,4 +6,8 @@ telegram_node:
     image_topic: "/camera/image_raw"   # real name confirmed at robot bring-up; set it here
     jpeg_quality: 85
     max_image_age: 2.0                 # seconds; older frames get a note in the caption
-    operator_timeout: 30               # match the state machine's WAIT_OPERATOR timeout
+    operator_timeout: 40               # match the state machine's WAIT_OPERATOR timeout
+    photo_delay: 10.5                  # seconds from /telegram/alert to the photo: password_denied
+                                       # (3.3 s) + photo_countdown (6.1 s) + a margin
+    retake_delay: 7.0                  # seconds from a Retake press to the photo: photo_countdown
+                                       # (6.1 s) + a margin
