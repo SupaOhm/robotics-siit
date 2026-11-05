@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A ROS 2 Humble colcon workspace for a Yahboom RosmasterPi A1 security robot. The operator drives it with hand gestures. It stops at obstacles, names objects aloud, asks people for a spoken password, and alerts the operator on Telegram when a password fails.
+A ROS 2 Humble colcon workspace for a Yahboom ROSMASTER M1 security robot. The operator drives it with hand gestures. It stops at obstacles, names objects aloud, asks people for a spoken password, and alerts the operator on Telegram when a password fails.
 
 Read these before changing behaviour:
 

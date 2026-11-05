@@ -42,7 +42,7 @@ bring-up checklist is in [robot-setup.md](robot-setup.md).
 | D16 | Robot OS | Yahboom image, ROS 2 Humble, **headless** (desktop off) | Fresh Ubuntu 22.04 (no official Pi 5 support); Ubuntu 24.04 + Jazzy (doesn't match CI); Pi OS + Humble in Docker (fallback) | 1 |
 | D17 | Network | **Phone hotspot** for robot and laptop (also gives Telegram internet) | Campus Wi-Fi (captive portal, multicast and client isolation risks) | 1, 2 |
 | D18 | Where inference runs | Gestures on the laptop, YOLO on the robot (moves to the laptop if too slow) | All on the robot; all on the laptop | 2, 5 |
-| D19 | Distance sensor | LiDAR if the A1 has one, else front ultrasonic. Lane 3 supports both | ToF; camera depth | 3 |
+| D19 | Distance sensor | LiDAR if the M1 has one, else front ultrasonic. Lane 3 supports both | ToF; camera depth | 3 |
 | D20 | Detection model | YOLO nano (YOLO11n / v8n), COCO pretrained, **NCNN** export, 320 px | PyTorch `.pt` (slower); YOLO small (too slow); MobileNet-SSD (less accurate) | 2, 5 |
 | D21 | Detection camera | Robot's onboard camera (also the Telegram photo) | Extra USB webcam at person height | 2 |
 | D22 | Microphone | USB mic on the robot. fah (Lane 4) gets it | Yahboom voice module (often fixed words only); laptop mic | 1, 4 |

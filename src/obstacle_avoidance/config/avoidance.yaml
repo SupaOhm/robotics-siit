@@ -21,7 +21,7 @@ avoidance_node:
     clear_distance: 0.40        # clear again at or above this (m)
     sensor_timeout: 0.5         # no reading this long -> blocked, turn fails (s)
 
-    # How AVOID turns away (D6, D13). The A1 has mecanum wheels, so it turns
+    # How AVOID turns away (D6, D13). The M1 has mecanum wheels, so it turns
     # in place. The state machine cancels AVOID after 10 s with no result, so
     # keep max_turn_deg / turn_speed (in rad) + clear_time well under 10 s.
     imu_topic: "/imu/data_raw"  # gyro for the turned angle; "" = estimate it as speed x time
