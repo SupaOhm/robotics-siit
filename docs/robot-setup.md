@@ -6,20 +6,32 @@ the blanks as you go. Other lanes read the results from here.
 
 ## 1. OS and ROS 2 (D16)
 
-- [ ] Board model (`cat /proc/device-tree/model`): `____`
-- [ ] Yahboom image booted, ROS 2 Humble. Version / image name: `____`
+- [x] Board model (`cat /proc/device-tree/model`): `Raspberry Pi 5 Model B Rev 1.1, 8 GB` (#29)
+- [x] Yahboom image booted, ROS 2 Humble. Version / image name: `Raspberry Pi OS (Debian 12 bookworm) on the host; ROS 2 Humble in the container, image 192.168.2.51:5000/ros-humble-m1:1.1.1`
 - [ ] Desktop switched off (headless), reached over SSH
-- [ ] Is ROS native or inside Docker? Container name and how to enter: `____`
-- [ ] If Docker: container runs with `--network host` and has the mic,
-      speaker and camera (`--device /dev/snd --device /dev/video0`)
+- [x] Is ROS native or inside Docker? Container name and how to enter: `Docker, container eager_pascal: docker exec -it eager_pascal bash` (from the Pi, not inside the container)
+      - The container's main process is `/root/run_handle.sh`. It sets the
+        domain (line 13, now `ROS_DOMAIN_ID=42` and CycloneDDS) and starts the
+        base driver. Change the domain there, then `docker restart eager_pascal`
+        on the Pi
+      - The image's `/root/.bashrc` sets `ROS_DOMAIN_ID=61` on line 100; it is
+        now 42, with `ROS_LOCALHOST_ONLY=0`, CycloneDDS and the workspace
+        `install/setup.bash` added
+      - Both edits live in the container. They survive a restart, not a
+        re-created container
+      - `/home/pi/share` on the Pi is `/root/share` in the container
+- [x] If Docker: container runs with `--network host` and has the mic,
+      speaker and camera (`--device /dev/snd --device /dev/video0`): both
+      visible in the container; sound card 2 (USB voice board) has capture
+      and playback
 - [ ] `ros2 doctor` runs without errors
 
 ## 2. Network (D17)
 
-- [ ] Phone hotspot: auto-off disabled, phone on a charger
-- [ ] Robot joins the hotspot. Hostname `____`, IP `____` (fixed if the
+- [x] Phone hotspot: auto-off disabled, phone on a charger
+- [x] Robot joins the hotspot. Hostname `raspberrypi`, IP `10.128.189.11` on `wlan0` (fixed if the
       phone allows it)
-- [ ] Laptop joins the hotspot
+- [x] Laptop joins the hotspot
 
 Every machine, in `~/.bashrc`. On a Linux laptop, `bash tools/ros_env_setup.sh`
 writes these lines and installs CycloneDDS; `bash tools/ros_env_setup.sh check`
@@ -33,10 +45,11 @@ export ROS_LOCALHOST_ONLY=0
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp   # sudo apt install ros-humble-rmw-cyclonedds-cpp
 ```
 
-- [ ] Robot: `ros2 run demo_nodes_cpp talker`; laptop: `ros2 run demo_nodes_cpp listener` gets the messages
-- [ ] Same test the other way round
-- [ ] If discovery fails on this phone (some iPhones block multicast): try
-      another phone, or fall back to Fast DDS with a discovery server
+- [x] Robot: `ros2 run demo_nodes_cpp talker`; laptop: `ros2 run demo_nodes_cpp listener` gets the messages
+- [x] Same test the other way round
+- [x] If discovery fails on this phone (some iPhones block multicast): try
+      another phone, or fall back to Fast DDS with a discovery server. Not
+      needed: discovery works with CycloneDDS
 - [ ] Gesture laptop OS (needs ROS 2 Humble: Ubuntu 22.04, WSL2, or Docker): `macOS on purin's M1 MacBook, ROS 2 Humble from RoboStack (tools/mac_ros_setup.sh)`
 
 ## 3. Hardware
@@ -47,11 +60,11 @@ state machine first: the script sends its own turn on `/cmd_vel`.
 
 | Device | Check | Result |
 |---|---|---|
-| Base | `ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.1}}"` moves it, zero stops it | |
+| Base | `ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.1}}"` moves it, zero stops it | Works on domain 42 (5 Nov) |
 | Turn in place (D13) | `ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist "{angular: {z: 0.5}}"` rotates it on the spot (mecanum), `{}` stops it | |
 | IMU (Lane 3) | During that turn, `ros2 topic echo /imu/data_raw --field angular_velocity.z` reads about +0.5: rad/s, positive turning left. `ros2 topic hz /imu/data_raw` well above 5 Hz | `____` |
-| Base driver launch | Command that starts it | `____` |
-| Camera (D21) | Topic name, `ros2 topic hz` rate, resolution. A person stands where the robot stops, then at 0.3 m: does YOLO find `person` by legs or feet? Record each for Lane 2: `ros2 bag record -o person_front /camera/image_raw /cmd_vel` | `____` |
+| Base driver launch | Command that starts it | `ros2 launch yahboomcar_ctrl yahboomcar_joy_launch.py`, run by `/root/run_handle.sh` at container start. Starts `Mcnamu_driver_M1` and the gamepad node `yahboom_joy_M1`, which can also publish `/cmd_vel` |
+| Camera (D21) | Topic name, `ros2 topic hz` rate, resolution. A person stands where the robot stops, then at 0.3 m: does YOLO find `person` by legs or feet? Record each for Lane 2: `ros2 bag record -o person_front /camera/image_raw /cmd_vel` | Not started at boot. Started by hand: `ros2 run usb_cam usb_cam_node_exe --ros-args -p video_device:=/dev/video0 -p image_width:=640 -p image_height:=480 -p framerate:=15.0 -r image_raw:=/camera/image_raw`. Rate and the person test: `____` |
 | Distance sensor (D19) | LiDAR fitted? Model, topic (`/scan`?), rate, which way 0° points, QoS (`ros2 topic info -v /scan`). Else ultrasonic topic | `____` |
 | Low objects (Lanes 2, 3) | Height of the LiDAR beam above the floor. Anything lower never stops the robot, so it is never named. Once `obstacle_avoidance` runs (§4), put a cup, then a bottle, 0.3 m in front: `ros2 topic echo /obstacle/distance` should read about 0.3 | `____` |
 | Size (Lane 3) | Robot width (`corridor_half_width` is half of it plus a margin) and the gap from the LiDAR to the front bumper | `____` |
@@ -64,16 +77,23 @@ state machine first: the script sends its own turn on `/cmd_vel`.
 
 ## 4. Repo on the robot
 
+Clone on the Pi into the shared folder, build inside the container:
+
 ```bash
-git clone https://github.com/SupaOhm/robotics-siit.git ~/robotics-siit
-cd ~/robotics-siit
+cd ~/share && git clone https://github.com/SupaOhm/robotics-siit.git   # on the Pi
+docker exec -it eager_pascal bash
+cd /root/share/robotics-siit
 colcon build --symlink-install
 source install/setup.bash
 ```
 
-- [ ] Builds on the robot
-- [ ] `pip install` works for: `ultralytics` + `ncnn` (Lane 2), `vosk`,
-      `python-telegram-bot` (Lane 4)
+Update later with `git pull` on the Pi, then `colcon build` in the container.
+
+- [x] Builds on the robot (7 packages, 10 s)
+- [x] `pip install` works for: `ultralytics` + `ncnn` (Lane 2), `vosk`,
+      `python-telegram-bot` (Lane 4). `ultralytics`, `ncnn` and
+      `python-telegram-bot` 22.8 were already installed; added `vosk` 0.3.45.
+      NumPy stays at 1.26.4
 
 ## 5. Hand-off
 
