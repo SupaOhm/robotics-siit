@@ -10,9 +10,10 @@ It covers the Lane 3 rows of docs/robot-setup.md §3 and ends with a summary
 to paste there:
 
 1. /scan and /imu/data_raw arrive, how fast, and with which QoS
-2. a box 0.3 m in front: which way the LiDAR's 0 deg points, and what
-   obstacle_avoidance would read
-3. a cup, then a bottle, 0.3 m in front: does the LiDAR beam see them?
+2. a box 0.3 m in front of the bumper: which way the LiDAR's 0 deg points,
+   and what obstacle_avoidance would read; then nothing in front: does the
+   LiDAR see the robot itself (the camera mount)?
+3. a cup, then a bottle, 0.3 m in front of the bumper: does the beam see them?
 4. a 2 s turn in place at +0.5 rad/s: does the IMU read about +0.5 rad/s?
 
 --no-objects skips 2 and 3, --no-turn skips 4. Robot width and the
@@ -38,6 +39,7 @@ from sim_avoidance import load_params  # noqa: E402
 TURN_SPEED = 0.5  # rad/s, the robot-setup.md turn-in-place test
 TURN_TIME = 2.0   # s
 SETTLE = 0.5      # s at the start of the turn left out of the IMU average
+PLACE = 0.3       # m from the front bumper to each test object
 
 
 def wrap(angle):
@@ -78,12 +80,22 @@ def judge_front_angle(angle):
     return "WARN", "box seen at %+.0f deg: 0 deg doesn't point ahead; set front_angle_deg to about %.0f" % (angle, angle)
 
 
-def judge_low_object(name, front):
-    if front <= 0.45:
-        return "PASS", "%s at 0.3 m: the node reads %.2f m" % (name, front)
-    if front <= 0.6:
-        return "WARN", "%s at 0.3 m: the node reads %.2f m, the beam only clips it" % (name, front)
-    return "FAIL", "%s at 0.3 m: the node reads %.2f m, so it is below the beam and never stops the robot" % (name, front)
+def judge_low_object(name, front, expected):
+    where = "%s 0.3 m from the bumper: the node reads %.2f m (expected about %.2f)" % (name, front, expected)
+    if front < expected - PLACE + 0.05:
+        return "WARN", where + ", closer than the bumper: the robot itself is in the way, so this can't tell"
+    if front <= expected + 0.15:
+        return "PASS", where
+    if front <= expected + 0.3:
+        return "WARN", where + ", the beam only clips it"
+    return "FAIL", where + ", so it is below the beam or doesn't reflect, and never stops the robot"
+
+
+def judge_empty_front(front, bumper_gap):
+    if front < bumper_gap + 0.05:
+        return "FAIL", ("nothing in front, yet the node reads %.2f m: the LiDAR sees the robot itself "
+                        "(the camera mount?), so it stays blocked" % front)
+    return "PASS", "nothing in front: the node reads %.2f m" % front
 
 
 def judge_imu(rates, commanded):
@@ -191,11 +203,14 @@ def run(args):
 
         if scans and not args.no_objects:
             print("2. Which way is front", flush=True)
-            if ask("Put a box 0.3 m straight ahead of the robot, nothing else within 1 m"):
+            expected = args.bumper_gap + PLACE  # what the LiDAR should read
+            if ask("Put a box 0.3 m straight ahead of the front bumper, nothing else within 1 m"):
                 t0 = time.monotonic()
                 time.sleep(1.0)
+                # Returns closer than the bumper are the robot itself, not the box
                 hits = [closest_return(s.ranges, s.angle_min, s.angle_increment,
-                                       min_valid=max(s.range_min, P["min_range"]))
+                                       max_dist=expected + 0.5,
+                                       min_valid=max(s.range_min, P["min_range"], args.bumper_gap - 0.05))
                         for s in node.since(node.scans, t0)]
                 hits = [h for h in hits if h]
                 if hits:
@@ -206,18 +221,23 @@ def run(args):
                         report("INFO", "the next checks look along %+d deg, where the box was" % front_deg[0])
                     front = front_reading()
                     if front is not None:
-                        report("INFO", "box: closest return %.2f m, obstacle_avoidance reads %.2f m (stops at %.2f)"
-                               % (statistics.median(d for d, _ in hits), front, P["stop_distance"]))
+                        report("INFO", "box: closest return %.2f m, obstacle_avoidance reads %.2f m "
+                               "(expected about %.2f, stops at %.2f)"
+                               % (statistics.median(d for d, _ in hits), front, expected, P["stop_distance"]))
                 else:
-                    report("FAIL", "no return within 1 m: is the box in the LiDAR's view?")
+                    report("FAIL", "no return near %.2f m: is the box in the LiDAR's view?" % expected)
+            if ask("Take the box away: nothing within 1 m of the front bumper"):
+                front = front_reading()
+                if front is not None:
+                    report(*judge_empty_front(front, args.bumper_gap))
             print("3. Low objects", flush=True)
             for name in ("cup", "bottle"):
-                if ask("Put a %s on the floor 0.3 m straight ahead, nothing else in front" % name):
+                if ask("Put a %s on the floor 0.3 m straight ahead of the bumper, nothing else in front" % name):
                     front = front_reading()
                     if front is None:
                         report("FAIL", "%s: no valid scans" % name)
                     else:
-                        report(*judge_low_object(name, front))
+                        report(*judge_low_object(name, front, expected))
 
         if not args.no_turn:
             print("4. Turn in place", flush=True)
@@ -255,6 +275,8 @@ def main():
     parser.add_argument("--scan-topic", default="/scan")
     parser.add_argument("--imu-topic", default="/imu/data_raw")
     parser.add_argument("--cmd-vel-topic", default="/cmd_vel")
+    parser.add_argument("--bumper-gap", type=float, default=0.0,
+                        help="m from the LiDAR to the front bumper (about 0 on the M1, wall test)")
     parser.add_argument("--no-objects", action="store_true", help="skip the box, cup and bottle")
     parser.add_argument("--no-turn", action="store_true", help="skip the turn (publishes /cmd_vel)")
     parser.add_argument("--force", action="store_true", help="turn even if something else publishes /cmd_vel")

@@ -108,8 +108,8 @@ ros2 topic echo /avoidance/result
 ```
 
 Check the Yahboom sensor topic with `ros2 topic list` and set `scan_topic`
-or `range_topic` to match. If the LiDAR's 0 degree points backward, set
-`front_angle_deg: 180.0`.
+or `range_topic` to match. The M1's LiDAR 0 degree points backward, so the
+yaml sets `front_angle_deg: 180.0`. Use 0.0 on a robot whose LiDAR faces forward.
 
 The node subscribes to the sensor and the IMU with `qos_profile_sensor_data`
 (best effort), which hears both best-effort and reliable publishers.
@@ -167,5 +167,19 @@ The topic contract lives in `docs/interfaces.md` (D5 for this package).
 ## Open questions
 
 1. LiDAR or ultrasonic? D19 says LiDAR if the M1 has one; confirmed at bring-up
-2. Stop and clear distances: 0.30 / 0.40 m are first guesses. Tune them on
-   the robot with the demo obstacles.
+2. Stop and clear distances: 0.30 / 0.40 m from the LiDAR. On the M1 the
+   LiDAR is about level with the front bumper (wall test), so the robot
+   stops about 0.30 m from the bumper, less what it rolls. It stopped
+   before a box on the robot; the gap left is still to measure.
+
+## Limitations
+
+- **Low objects:** on the M1 the LiDAR beam is about 16 cm above the floor
+  (Yahboom's drawing puts the top of the LiDAR at 181.4 mm). Anything lower,
+  such as a cup, or a laptop on the floor, never stops the robot, so the
+  detector never gets to name it. Use objects taller than 16 cm in the demo.
+- **Clear and dark surfaces:** clear plastic and matt black can return no
+  reading. On the robot the beam went through a clear Crystal bottle 0.3 m
+  ahead and read 0.60 m.
+- **Front only:** the robot stops for what is ahead. Backing up (`back`)
+  has no obstacle check.
