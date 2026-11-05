@@ -130,3 +130,72 @@ def test_cv_bridge_never_converts_colours(node, monkeypatch):
         frame(node, encoding)
         node.snapshot()
     assert set(FakeBridge.used) == {"passthrough"}
+
+
+# ----- countdown before the photo ----------------------------------------
+
+
+class FakeTimer:
+    started = []
+
+    def __init__(self, delay, function, args=()):
+        self.delay, self.function, self.args = delay, function, args
+
+    def start(self):
+        self.started.append(self)
+
+    def fire(self):
+        self.function(*self.args)
+
+
+@pytest.fixture
+def waiting(node, monkeypatch):
+    """(node, what it submitted to the bot); the timers fire by hand."""
+    FakeTimer.started = []
+    monkeypatch.setattr("threading.Timer", FakeTimer)
+    submitted = []
+    node.submit = submitted.append
+    frame(node)
+    working_bridge(monkeypatch)
+    return node, submitted
+
+
+def test_alert_plays_the_countdown_and_waits_for_the_photo(waiting):
+    node, submitted = waiting
+    node.on_alert(SimpleNamespace(data="a1"))
+    sys.modules["std_msgs.msg"].String.assert_called_with(data="photo_countdown")
+    assert node.audio_pub.publish.call_count == 1
+    assert submitted == [] and FakeTimer.started[0].delay == 9.0
+    FakeTimer.started[0].fire()
+    assert len(submitted) == 1
+
+
+def test_card_shows_the_time_left_after_the_countdown(node):
+    assert node.bot.book.timeout_s == 21  # 30 s - 9 s
+
+
+def test_robot_leaving_during_the_countdown_skips_the_card(waiting):
+    node, submitted = waiting
+    node.on_robot_state(SimpleNamespace(data="WAIT_OPERATOR"))
+    node.on_alert(SimpleNamespace(data="a1"))
+    node.on_robot_state(SimpleNamespace(data="DRIVE"))
+    FakeTimer.started[0].fire()
+    assert len(submitted) == 1  # only the robot_state close, no alert
+
+
+def test_a_state_message_that_lags_the_alert_keeps_the_card(waiting):
+    node, submitted = waiting
+    node.on_robot_state(SimpleNamespace(data="CHECKPOINT"))
+    node.on_alert(SimpleNamespace(data="a1"))
+    node.on_robot_state(SimpleNamespace(data="WAIT_OPERATOR"))
+    FakeTimer.started[0].fire()
+    assert len(submitted) == 2  # the state change, then the alert
+
+
+def test_a_newer_alert_replaces_one_still_counting_down(waiting):
+    node, submitted = waiting
+    node.on_alert(SimpleNamespace(data="a1"))
+    node.on_alert(SimpleNamespace(data="a2"))
+    for timer in FakeTimer.started:
+        timer.fire()
+    assert len(submitted) == 1

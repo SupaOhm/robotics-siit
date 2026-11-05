@@ -14,10 +14,11 @@ is needed.
 
 | Topic | Type | Direction | Meaning |
 |---|---|---|---|
-| `/telegram/alert` | `std_msgs/String` | in | Alert id, e.g. `a3`. Send the latest camera frame with **Allow** / **Deny** |
+| `/telegram/alert` | `std_msgs/String` | in | Alert id, e.g. `a3`. Play the countdown, then send the latest camera frame with **Allow** / **Deny** |
 | `/telegram/blocking` | `std_msgs/String` | in | A **new** alert id. Deny or 30 s timeout happened: send "Robot is blocking" with **Resume** |
 | `/telegram/decision` | `std_msgs/String` (JSON) | out | `{"id": "a3", "decision": "allow"}`. `decision` is `allow`, `deny` or `resume` |
 | `/robot/state` | `std_msgs/String` | in | Leaving `WAIT_OPERATOR` or `BLOCKING` (e.g. the operator held `back`) closes that state's buttons |
+| `/audio/play` | `std_msgs/String` | out | `photo_countdown`, played on each alert |
 | `/camera/image_raw` | `sensor_msgs/Image` | in | Camera frames. Only the latest is kept, as raw bytes; it is decoded only when an alert comes in |
 
 **The 30 s timeout is in the state machine (D15), not here.** When it runs
@@ -30,13 +31,20 @@ What the operator sees:
 ```
 🚨 Checkpoint: this person did not pass the password check.   [photo]
 Alert a3 at 14:02:11
-Allow this person to pass? No answer in 30 s = Deny.
+Allow this person to pass? No answer in 21 s = Deny.
 [ ✅ Allow ] [ ⛔ Deny ]
 ```
 
 The text doesn't say "3 wrong passwords", because the robot also asks the
-operator when the password check gets no result in 60 s (D30). The "30 s"
-comes from `operator_timeout`; keep it equal to the state machine's.
+operator when the password check gets no result in 60 s (D30). The "21 s"
+is the time left: `operator_timeout`, which must equal the state machine's,
+minus `photo_delay`.
+
+The robot warns the person first. On `/telegram/alert` the node plays
+`photo_countdown` and waits `photo_delay` (9 s: 3.3 s of `password_denied`, then
+the countdown) before it takes the photo, so the card arrives after that. There's
+no signal when a clip ends, so set `photo_delay` from the real clip length. If
+the robot leaves `WAIT_OPERATOR` during the wait, no card is sent.
 
 After a press, the buttons disappear, the message shows "✅ Allowed by
 @name" (or Denied / Resumed), and the decision is published at once.
