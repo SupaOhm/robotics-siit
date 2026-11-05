@@ -4,7 +4,8 @@
     python -m telegram_alert.bot_demo --env-file ../../.env --image person.jpg
 
 Plays the state machine's part: sends an alert, waits up to --timeout seconds
-for Allow / Deny, then (after Deny or no answer) sends "Robot is blocking"
+for Allow / Deny (Retake puts the same image back after 2 s), then (after
+Deny or no answer) sends "Robot is blocking"
 and waits for Resume. Decisions are printed as they would be published.
 """
 
@@ -36,7 +37,13 @@ async def run(args) -> None:
         print("/telegram/decision:", json.dumps(decision))
         decisions.put_nowait(decision)
 
-    bot = AlertBot(settings, on_decision, timeout_s=int(args.timeout))
+    def on_retake(card):
+        async def later():
+            await asyncio.sleep(2)
+            await bot.retake(card, jpeg, "" if jpeg else "(demo: no image)")
+        asyncio.ensure_future(later())
+
+    bot = AlertBot(settings, on_decision, timeout_s=int(args.timeout), on_retake=on_retake)
     await bot.start()
     try:
         print("Sending alert demo1, answer in Telegram within %.0f s..." % args.timeout)

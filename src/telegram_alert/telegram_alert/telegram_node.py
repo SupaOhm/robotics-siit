@@ -1,7 +1,8 @@
 """ROS 2 node: Telegram alerts for the security checkpoint.
 
 Follows docs/interfaces.md (contract v0.3, D11, D14, D15, D26):
-  sub  /telegram/alert     String  alert id: send a photo with Allow / Deny
+  sub  /telegram/alert     String  alert id: play the countdown, then send a photo
+                                   with Allow / Deny
   sub  /telegram/blocking  String  new alert id: Deny or 30 s timeout happened;
                                    expire Allow / Deny, send Resume
   sub  /robot/state        String  leaving WAIT_OPERATOR / BLOCKING closes old buttons
@@ -9,6 +10,7 @@ Follows docs/interfaces.md (contract v0.3, D11, D14, D15, D26):
                                    with the next alert, then deleted (D32)
   sub  <image_topic>       Image   latest camera frame, used for the photo
   pub  /telegram/decision  String  JSON {"id": "a3", "decision": "allow"|"deny"|"resume"}
+  pub  /audio/play         String  photo_countdown (each alert, each Retake press)
 
 The 30 s timeout is in the state machine; this node only shows it.
 ROS spins in a background thread; the Telegram bot runs on asyncio in the
@@ -34,6 +36,7 @@ from .settings import load_settings
 
 MAX_PENDING = 10  # messages kept while the bot is still connecting
 MAX_RECORDINGS = 3  # one session's failed answers (max_attempts)
+COUNTDOWN_CLIP = "photo_countdown"
 # Camera encoding -> cv2 colour conversion to BGR. Not cv_bridge's own: under
 # NumPy 2 it segfaults, which no except can catch, and the alert dies with the node.
 TO_BGR = {
@@ -52,12 +55,16 @@ class TelegramNode(Node):
         p("jpeg_quality", 85)
         p("max_image_age", 2.0)  # older frames are still sent, with a note
         p("operator_timeout", 30)  # the state machine's WAIT_OPERATOR timeout (text only)
+        p("photo_delay", 10.5)  # /telegram/alert to photo: password_denied + countdown clip
+        p("retake_delay", 7.0)  # Retake press to photo: the countdown clip
         p("env_file", "")  # optional .env with TELEGRAM_* (gitignored)
 
         g = lambda name: self.get_parameter(name).value
         settings = load_settings(env_file=g("env_file"))
         self.jpeg_quality = int(g("jpeg_quality"))
         self.max_image_age = float(g("max_image_age"))
+        self.photo_delay = float(g("photo_delay"))
+        self.retake_delay = float(g("retake_delay"))
 
         self._last_image = None  # (serialized Image bytes, monotonic time received)
         self._robot_state = None
@@ -65,8 +72,11 @@ class TelegramNode(Node):
         self.loop = None
         self._pending = []  # coroutine factories waiting for the bot to connect
         self._pending_lock = threading.Lock()
+        self._waiting_alert = None  # alert id in its countdown, sent when the timer ends
+        self._alert_lock = threading.Lock()
 
         self.decision_pub = self.create_publisher(String, "/telegram/decision", 10)
+        self.audio_pub = self.create_publisher(String, "/audio/play", 10)
         self.create_subscription(String, "/telegram/alert", self.on_alert, 10)
         self.create_subscription(String, "/telegram/blocking", self.on_blocking, 10)
         self.create_subscription(String, "/robot/state", self.on_robot_state, 10)
@@ -75,8 +85,11 @@ class TelegramNode(Node):
         self.create_subscription(Image, g("image_topic"), self.on_image,
                                  qos_profile_sensor_data, raw=True)
         log = self.get_logger()
+        # The card goes out after the countdown, so it shows the time left.
+        time_left = max(int(g("operator_timeout") - self.photo_delay), 1)
         self.bot = AlertBot(settings, self.publish_decision, log=log.info,
-                            warn=log.warning, timeout_s=int(g("operator_timeout")))
+                            warn=log.warning, timeout_s=time_left,
+                            on_retake=self.start_retake)
 
     def publish_decision(self, decision: dict) -> None:
         self.decision_pub.publish(String(data=json.dumps(decision)))
@@ -148,11 +161,38 @@ class TelegramNode(Node):
         if not alert_id:
             self.get_logger().warning("empty alert id ignored")
             return
+        with self._alert_lock:
+            self._waiting_alert = alert_id
+        self.audio_pub.publish(String(data=COUNTDOWN_CLIP))
+        timer = threading.Timer(self.photo_delay, self.send_alert, args=(alert_id,))
+        timer.daemon = True
+        timer.start()
+
+    def send_alert(self, alert_id: str) -> None:
+        """The countdown ended: take the photo, unless the robot moved on."""
         jpeg, note = self.snapshot()
+        # Taken even if the card is skipped: a person's voice must not wait for
+        # the next alert, where it would go out with someone else's photo.
         voices = self.take_recordings()
-        self.get_logger().info("alert %s (photo: %s, answers: %d)"
-                               % (alert_id, "yes" if jpeg else "no", len(voices)))
-        self.submit(lambda: self.bot.alert(alert_id, jpeg, note, voices))
+        with self._alert_lock:
+            if self._waiting_alert != alert_id:
+                self.get_logger().info("alert %s skipped: the robot moved on" % alert_id)
+                return
+            self._waiting_alert = None
+            self.get_logger().info("alert %s (photo: %s, answers: %d)"
+                                   % (alert_id, "yes" if jpeg else "no", len(voices)))
+            self.submit(lambda: self.bot.alert(alert_id, jpeg, note, voices))
+
+    def start_retake(self, card) -> None:
+        """Retake was pressed. Runs on the bot's loop, so it must not block."""
+        self.audio_pub.publish(String(data=COUNTDOWN_CLIP))
+        timer = threading.Timer(self.retake_delay, self.send_retake, args=(card,))
+        timer.daemon = True
+        timer.start()
+
+    def send_retake(self, card) -> None:
+        jpeg, note = self.snapshot()
+        self.submit(lambda: self.bot.retake(card, jpeg, note))
 
     def on_blocking(self, msg) -> None:
         alert_id = msg.data.strip()
@@ -166,7 +206,10 @@ class TelegramNode(Node):
         new, old = msg.data.strip(), self._robot_state
         self._robot_state = new
         if old is not None and new != old:
-            self.submit(lambda: self.bot.robot_state(old, new))
+            with self._alert_lock:
+                if old == "WAIT_OPERATOR":
+                    self._waiting_alert = None  # no card for a person we left
+                self.submit(lambda: self.bot.robot_state(old, new))
 
     async def connect(self) -> None:
         """Keep trying until Telegram answers: the hotspot may come up after

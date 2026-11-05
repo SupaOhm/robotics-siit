@@ -10,6 +10,7 @@ pytest.importorskip("telegram")
 
 from telegram.error import BadRequest, NetworkError, TimedOut  # noqa: E402
 
+from telegram_alert.alert_book import RETAKE_BUSY_TOAST  # noqa: E402
 from telegram_alert.bot import AlertBot  # noqa: E402
 from telegram_alert.settings import Settings  # noqa: E402
 
@@ -49,6 +50,9 @@ class FakeBot:
 
     async def edit_message_text(self, **kw):
         self.calls.append(("edit_message_text", kw))
+
+    async def edit_message_media(self, **kw):
+        return await self._sent("edit_message_media", **kw)
 
 
 @pytest.fixture(autouse=True)
@@ -101,7 +105,7 @@ def test_alert_with_photo_then_allow():
     answers = asyncio.run(go())
     kind, kw = fake.calls[0]
     assert kind == "send_photo" and kw["chat_id"] == CHAT and kw["photo"] == b"\xff\xd8jpeg"
-    assert [b.split(":")[0] for b in buttons(fake.calls[0])] == ["allow", "deny"]
+    assert [b.split(":")[0] for b in buttons(fake.calls[0])] == ["allow", "deny", "retake"]
     assert decisions == [{"id": "a1", "decision": "allow"}]
     assert "@op" in answers[0]
     kind, kw = fake.calls[1]
@@ -291,3 +295,121 @@ def test_no_voices_without_a_delivered_alert():
     fake.fail["send_message"] = BadRequest("y")
     asyncio.run(bot.alert("a1", b"jpeg", voices=[("voice", b"ogg1")]))
     assert kinds(fake) == []
+def alert_card(bot):
+    return next(iter(bot.book.cards.values()))
+
+
+def retake_press(fake):
+    return press(buttons(fake.calls[0])[2])
+
+
+def test_retake_replaces_the_photo_and_keeps_the_buttons():
+    bot, fake, decisions, _ = make()
+    wanted = []
+    bot.on_retake = wanted.append
+
+    async def go():
+        await bot.alert("a1", b"old")
+        await bot.on_button(retake_press(fake)[0], None)
+        await bot.retake(wanted[0], b"new")
+
+    asyncio.run(go())
+    kind, kw = fake.calls[1]
+    assert kind == "edit_message_media" and kw["message_id"] == 2
+    assert "reply_markup" in kw and decisions == []
+    assert alert_card(bot).open and not alert_card(bot).retaking
+
+
+def test_retake_clears_the_old_note():
+    bot, fake, _, _ = make()
+    asyncio.run(bot.alert("a1", b"old", "(camera image 5 s old)"))
+    card = alert_card(bot)
+    asyncio.run(bot.retake(card, b"new"))
+    assert "5 s old" not in card.text and "5 s old" not in fake.calls[1][1]["media"].caption
+
+
+def test_retake_after_allow_does_nothing():
+    bot, fake, decisions, _ = make()
+    wanted = []
+    bot.on_retake = wanted.append
+
+    async def go():
+        await bot.alert("a1", b"old")
+        await bot.on_button(retake_press(fake)[0], None)
+        await bot.on_button(press(buttons(fake.calls[0])[0])[0], None)
+        await bot.retake(wanted[0], b"new")
+
+    asyncio.run(go())
+    assert decisions == [{"id": "a1", "decision": "allow"}]
+    assert "edit_message_media" not in kinds(fake)
+
+
+def test_second_press_starts_one_retake_and_says_so():
+    bot, fake, _, _ = make()
+    wanted = []
+    bot.on_retake = wanted.append
+
+    async def go():
+        await bot.alert("a1", b"old")
+        await bot.on_button(retake_press(fake)[0], None)
+        update, answers = retake_press(fake)
+        await bot.on_button(update, None)
+        return answers
+
+    assert asyncio.run(go()) == [RETAKE_BUSY_TOAST] and len(wanted) == 1
+
+
+def test_failed_retake_keeps_the_old_photo_and_says_so():
+    bot, fake, _, warnings = make()
+    fake.fail["edit_message_media"] = BadRequest("Wrong file")
+
+    async def go():
+        await bot.alert("a1", b"old")
+        await bot.retake(alert_card(bot), b"new")
+
+    asyncio.run(go())
+    kind, kw = fake.calls[1]
+    assert kind == "edit_message_caption" and "(retake failed)" in kw["caption"]
+    assert "reply_markup" in kw and any("retake failed" in w for w in warnings)
+
+
+def test_retake_with_no_camera_image_keeps_the_old_photo():
+    bot, fake, _, _ = make()
+
+    async def go():
+        await bot.alert("a1", b"old")
+        await bot.retake(alert_card(bot), None, "(no camera image)")
+
+    asyncio.run(go())
+    assert kinds(fake) == ["send_photo", "edit_message_caption"]
+    assert alert_card(bot).open
+
+
+def test_retake_on_a_text_card_moves_to_a_photo_message():
+    bot, fake, _, _ = make()
+
+    async def go():
+        await bot.alert("a1", None, "(no camera image)")
+        await bot.retake(alert_card(bot), b"new")
+        await bot.blocking("a2")  # the expiry must edit the new message
+
+    asyncio.run(go())
+    assert kinds(fake)[:4] == ["send_message", "send_photo", "edit_message_text",
+                               "edit_message_caption"]
+    assert "reply_markup" not in fake.calls[2][1]
+    assert fake.calls[2][1]["message_id"] == 2  # the old text card loses its buttons
+    assert fake.calls[3][1]["message_id"] == 3  # the expiry edits the photo
+    assert "no camera image" not in fake.calls[1][1]["caption"]
+
+
+def test_retake_timeout_is_not_reported_as_failed():
+    bot, fake, _, warnings = make()
+    fake.fail["edit_message_media"] = TimedOut()
+
+    async def go():
+        await bot.alert("a1", b"old")
+        await bot.retake(alert_card(bot), b"new")
+
+    asyncio.run(go())
+    assert kinds(fake) == ["send_photo"]
+    assert any("may still arrive" in w for w in warnings)
