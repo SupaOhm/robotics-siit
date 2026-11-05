@@ -48,8 +48,8 @@ bring-up checklist is in [robot-setup.md](robot-setup.md).
 | D20 | Detection model | YOLO nano (YOLO11n / v8n), COCO pretrained, **NCNN** export, 320 px | PyTorch `.pt` (slower); YOLO small (too slow); MobileNet-SSD (less accurate) | 2, 5 |
 | D21 | Detection camera | Robot's onboard camera (also the Telegram photo) | Extra USB webcam at person height | 2 |
 | D22 | Microphone | USB mic on the robot. fah (Lane 4) gets it | Yahboom voice module (often fixed words only); laptop mic | 1, 4 |
-| D23 | What the person says | **Spoken digits** | Fixed passphrase; answer to a question | 4 |
-| D24 | Speech recognition | **Vosk** offline, vocabulary limited to the digits. Cloud Whisper API is a good fallback but costs money | Google Web Speech (unofficial, can fail); whisper.cpp on the Pi (slow) | 4 |
+| D23 | What the person says | **Spoken digits, or one spoken word** (changed Nov 5: Vosk missed the digits on the robot's mic). A word is easier to guess, so pick an uncommon one | Fixed passphrase; answer to a question | 1, 4 |
+| D24 | Speech recognition | **Vosk** offline, vocabulary limited to the digits plus `vosk_words` (set on the robot, never in the repo, for a word password). Cloud Whisper API is a good fallback but costs money | Google Web Speech (unofficial, can fail); whisper.cpp on the Pi (slow) | 4 |
 | D25 | Voice output | Pre-recorded clips, played with `aplay` | Offline TTS (Piper, espeak) | 4 |
 | D26 | Telegram | `python-telegram-bot`, long polling | `pyTelegramBotAPI`; webhook (needs public HTTPS) | 4 |
 | D27 | Simulation bridge | CoppeliaSim ZeroMQ remote API + a thin ROS 2 node. In sim, typed attempts on `/password/sim_input` stand in for the mic; Telegram is the real bot over the hotspot | simROS2 plugin (compile for our ROS); fake Telegram too | 5 |
