@@ -29,6 +29,14 @@ from .bot import AlertBot
 from .settings import load_settings
 
 MAX_PENDING = 10  # messages kept while the bot is still connecting
+# Camera encoding -> cv2 colour conversion to BGR. Not cv_bridge's own: under
+# NumPy 2 it segfaults, which no except can catch, and the alert dies with the node.
+TO_BGR = {
+    "bgr8": None,
+    "rgb8": "COLOR_RGB2BGR",
+    "mono8": "COLOR_GRAY2BGR",
+    "yuv422_yuy2": "COLOR_YUV2BGR_YUY2",
+}
 
 
 class TelegramNode(Node):
@@ -46,8 +54,6 @@ class TelegramNode(Node):
         self.jpeg_quality = int(g("jpeg_quality"))
         self.max_image_age = float(g("max_image_age"))
 
-        from cv_bridge import CvBridge
-        self.bridge = CvBridge()
         self._last_image = None  # (serialized Image bytes, monotonic time received)
         self._robot_state = None
         self.loop = None
@@ -77,11 +83,16 @@ class TelegramNode(Node):
             return None, "(no camera image)"
         raw, received = self._last_image
         try:
+            # Imported here so a broken cv_bridge or cv2 costs the photo, not the alert.
             import cv2
+            from cv_bridge import CvBridge
             msg = deserialize_message(raw, Image)
-            frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
+            conversion = TO_BGR[msg.encoding]
+            frame = CvBridge().imgmsg_to_cv2(msg, desired_encoding="passthrough")
+            if conversion is not None:
+                frame = cv2.cvtColor(frame, getattr(cv2, conversion))
             ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, self.jpeg_quality])
-        except Exception as e:  # bad encoding etc.: still send the alert
+        except Exception as e:  # unknown encoding etc.: still send the alert
             self.get_logger().error("camera frame to JPEG failed: %s" % e)
             return None, "(camera image failed)"
         if not ok:

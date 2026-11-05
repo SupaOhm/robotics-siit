@@ -38,14 +38,14 @@ people with a password.
 
 ## Lanes
 
-| Lane | People | Owns |
-|---|---|---|
-| 1. Integration, hardware base, PM | guy | ROS nodes/topics/messages, state machine, gesture override, robot OS/ROS setup, porting to robot |
-| 2. AI & vision | purin (gesture control), ohm (object detection) | Gesture ROS node (purin); YOLO detection, person class, spoken name table (ohm) |
-| 3. Navigation & avoidance, co-PM | po | Distance sensor driver, noise filter, threshold, turn/resume logic |
-| 4. I/O & external comms | pun, fah | Audio clips + playback cooldown, password system, Telegram bot |
-| 5. Simulation & QA | bew, big | CoppeliaSim scene + ROS bridge, FPS benchmark, system testing |
-| 6. Docs & presentation | aom | Report, demo video, slides |
+| Lane | People | GitHub | Owns |
+|---|---|---|---|
+| 1. Integration, hardware base, PM | guy | @Jaoguya | ROS nodes/topics/messages, state machine, gesture override, robot OS/ROS setup, porting to robot |
+| 2. AI & vision | purin (gesture control), ohm (object detection) | @purin-kan, @SupaOhm | Gesture ROS node (purin); YOLO detection, person class, spoken name table (ohm) |
+| 3. Navigation & avoidance, co-PM | po | @Napat-hi | Distance sensor driver, noise filter, threshold, turn/resume logic |
+| 4. I/O & external comms | pun, fah | @Tinpatpun, @Paveeranuch | Audio clips + playback cooldown, password system, Telegram bot |
+| 5. Simulation & QA | bew, big | @boobaoooo, @suppakrit-work | CoppeliaSim scene + ROS bridge, FPS benchmark, system testing |
+| 6. Docs & presentation | aom | @a3troooooo | Report, demo video, slides |
 
 ## Timeline
 
@@ -54,7 +54,7 @@ people with a password.
 - [x] GitHub repo created
 - [x] First package merged (`password_system`, Lane 4)
 - [x] Plan, README, contribution rules, PR template, CI
-- [ ] All 9 members added as collaborators
+- [x] All 9 members added as collaborators
 - [x] Lane 1 and Lane 6 names filled in above
 - [x] `main` branch protected (PR + 1 review)
 - [ ] Everyone has cloned the repo and read [CONTRIBUTING.md](CONTRIBUTING.md)
@@ -73,7 +73,7 @@ people with a password.
 - [ ] Lane 2 (purin): laptop → robot link over the hotspot; `/gesture/command` received on the robot
 - [x] Lane 2 (ohm): detector node with the person class and an English name table (3 objects)
 - [ ] Lane 2 (ohm): YOLO running on the robot; name table grown to 5 objects
-- [ ] Lane 3: sensor driver, noise filter, avoidance turn logic
+- [x] Lane 3: sensor driver, noise filter, avoidance turn logic (`obstacle_avoidance`, #3)
 - [ ] Lane 4: record audio clips and audio player
 - [x] Lane 4: Telegram bot
 - [x] Lane 4: spoken password (`password_node`)

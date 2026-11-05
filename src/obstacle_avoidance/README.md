@@ -71,6 +71,23 @@ machine, launch with `cmd_vel_topic:=/cmd_vel`.
   the first reading also fails.
 - **Turn time:** the state machine cancels a turn after 10 s with no result.
   The longest turn (270 degrees at 1 rad/s) takes 4.7 s.
+- **Stopping distance:** the robot keeps moving for up to about 0.45 s after
+  an obstacle comes within 0.30 m: up to 0.1 s to the next scan, about 0.2 s
+  while the median of 5 catches up, up to 0.1 s to the next
+  `/obstacle/detected`, then the state machine and the brakes. At 0.3 m/s
+  the 0.45 s is about 13 cm, so the robot stops about 0.17 m from the
+  LiDAR, minus the LiDAR-to-bumper gap. Keep `linear_speed` at 0.3 m/s or
+  below until bring-up measures it.
+
+  CoppeliaSim agrees (`tools/sim_avoidance.py --speed S --react 0.2`, the
+  0.2 s standing in for the heartbeat and the state machine's tick). The lab
+  robot came to rest this far from the LiDAR:
+
+  | Speed | Stopped at | Gap at the front |
+  |---|---|---|
+  | 0.1 m/s | 0.25 m | 15 cm |
+  | 0.2 m/s (`robot_core`'s `linear_speed`) | 0.20 m | 10 cm |
+  | 0.3 m/s | 0.17 m | 7 cm |
 
 Every number above is a parameter in [config/avoidance.yaml](config/avoidance.yaml).
 

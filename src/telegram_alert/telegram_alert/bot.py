@@ -13,9 +13,9 @@ from .alert_book import AlertBook, Card, Close
 
 TRIES = 3
 TIMED_OUT = object()  # _call result: a send timed out and may have been delivered
-# Upload limit for the photo (the library's default is 20 s). A camera JPEG is
-# ~50 KB; if it times out, the text fallback still reaches the operator early
-# in the 30 s window.
+# Limit on each network write of the photo upload (the library's default is
+# 20 s), not on the whole send. A camera JPEG is ~50 KB, so a stalled upload
+# normally times out early in the 30 s window, and the text fallback follows.
 PHOTO_WRITE_TIMEOUT = 8.0
 
 
