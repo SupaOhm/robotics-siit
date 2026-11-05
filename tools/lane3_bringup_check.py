@@ -275,8 +275,8 @@ def main():
     parser.add_argument("--scan-topic", default="/scan")
     parser.add_argument("--imu-topic", default="/imu/data_raw")
     parser.add_argument("--cmd-vel-topic", default="/cmd_vel")
-    parser.add_argument("--bumper-gap", type=float, default=0.06,
-                        help="m from the LiDAR to the front bumper (about 0.06 on the M1; measure it)")
+    parser.add_argument("--bumper-gap", type=float, default=0.0,
+                        help="m from the LiDAR to the front bumper (about 0 on the M1, wall test)")
     parser.add_argument("--no-objects", action="store_true", help="skip the box, cup and bottle")
     parser.add_argument("--no-turn", action="store_true", help="skip the turn (publishes /cmd_vel)")
     parser.add_argument("--force", action="store_true", help="turn even if something else publishes /cmd_vel")
