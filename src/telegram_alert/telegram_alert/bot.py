@@ -76,9 +76,10 @@ class AlertBot:
     # ----- state machine -> Telegram -------------------------------------
 
     async def alert(self, alert_id: str, jpeg: Optional[bytes] = None, note: str = "",
-                    voices: Sequence[Tuple[str, bytes]] = ()) -> None:
+                    voices: Sequence[Tuple[str, bytes, str]] = ()) -> None:
         """Photo of the person with Allow / Deny buttons, then the failed
-        password answers as replies to it (D32): ("voice" | "document", bytes)."""
+        password answers as replies to it (D32):
+        ("voice" | "document", bytes, what the speech engine heard)."""
         async with self._lock:
             closes, card = self.book.new_alert(alert_id, _clock())
             await self._close(closes)
@@ -168,8 +169,9 @@ class AlertBot:
     async def _send_voices(self, card: Card, voices) -> None:
         """Each answer once, as a reply to the card; a failure skips it."""
         chat = self.settings.chat_id
-        for i, (kind, data) in enumerate(voices, 1):
-            caption = "Answer %d of alert %s" % (i, card.alert_id)
+        for i, (kind, data, heard) in enumerate(voices, 1):
+            caption = "Answer %d of alert %s: %s" % (
+                i, card.alert_id, 'heard "%s"' % heard if heard else "no digits recognised")
             if kind == "voice":
                 sent = await self._call("send voice", lambda: self.bot.send_voice(
                     chat_id=chat, voice=data, caption=caption,

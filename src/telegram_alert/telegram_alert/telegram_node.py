@@ -5,8 +5,9 @@ Follows docs/interfaces.md (contract v0.3, D11, D14, D15, D26):
   sub  /telegram/blocking  String  new alert id: Deny or 30 s timeout happened;
                                    expire Allow / Deny, send Resume
   sub  /robot/state        String  leaving WAIT_OPERATOR / BLOCKING closes old buttons
-  sub  /password/recording String  WAV path of a failed password answer; sent
-                                   with the next alert, then deleted (D32)
+  sub  /password/recording String  JSON {"path", "heard"}: a failed password
+                                   answer; sent with the next alert, then
+                                   deleted (D32)
   sub  <image_topic>       Image   latest camera frame, used for the photo
   pub  /telegram/decision  String  JSON {"id": "a3", "decision": "allow"|"deny"|"resume"}
 
@@ -85,15 +86,21 @@ class TelegramNode(Node):
         self._last_image = (raw, time.monotonic())
 
     def on_recording(self, msg) -> None:
-        self._recordings.append(msg.data.strip())
+        try:
+            rec = json.loads(msg.data)
+            path, heard = rec["path"], str(rec.get("heard", ""))
+        except (ValueError, KeyError, TypeError):
+            self.get_logger().warning("bad /password/recording ignored")
+            return
+        self._recordings.append((path, heard))
         del self._recordings[:-MAX_RECORDINGS]
 
     def take_recordings(self):
-        """The waiting answers as (kind, bytes) for Telegram. Each file is
-        read once and deleted: it holds a person's voice."""
+        """The waiting answers as (kind, bytes, heard) for Telegram. Each
+        file is read once and deleted: it holds a person's voice."""
         out = []
-        paths, self._recordings = self._recordings, []
-        for path in paths:
+        waiting, self._recordings = self._recordings, []
+        for path, heard in waiting:
             try:
                 with open(path, "rb") as f:
                     wav = f.read()
@@ -101,7 +108,7 @@ class TelegramNode(Node):
             except OSError as e:
                 self.get_logger().warning("recording %s skipped: %s" % (path, e))
                 continue
-            out.append(voice.to_voice(wav))
+            out.append(voice.to_voice(wav) + (heard,))
         return out
 
     def snapshot(self):

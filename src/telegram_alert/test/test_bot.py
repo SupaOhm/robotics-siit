@@ -263,13 +263,15 @@ def test_network_error_is_retried_and_bad_request_is_not():
 def test_failed_answers_follow_the_alert_as_replies():
     # D32: the operator hears what the person said
     bot, fake, _, _ = make()
-    asyncio.run(bot.alert("a1", b"jpeg", voices=[("voice", b"ogg1"), ("document", b"wav2")]))
+    asyncio.run(bot.alert("a1", b"jpeg", voices=[("voice", b"ogg1", "six seven six six"),
+                                                 ("document", b"wav2", "")]))
     assert kinds(fake) == ["send_photo", "send_voice", "send_document"]
     voice, doc = fake.calls[1][1], fake.calls[2][1]
     assert voice["voice"] == b"ogg1" and voice["reply_to_message_id"] == 2
-    assert "Answer 1" in voice["caption"]
+    assert "Answer 1" in voice["caption"] and 'heard "six seven six six"' in voice["caption"]
     assert doc["document"] == b"wav2" and doc["reply_to_message_id"] == 2
     assert doc["filename"].endswith(".wav") and "Answer 2" in doc["caption"]
+    assert "no digits recognised" in doc["caption"]
 
 
 def test_failed_voice_send_keeps_the_alert():
@@ -277,7 +279,7 @@ def test_failed_voice_send_keeps_the_alert():
     fake.fail["send_voice"] = BadRequest("Voice_messages_forbidden")
 
     async def go():
-        await bot.alert("a1", b"jpeg", voices=[("voice", b"ogg1")])
+        await bot.alert("a1", b"jpeg", voices=[("voice", b"ogg1", "x")])
         await bot.on_button(press(buttons(fake.calls[0])[0])[0], None)
 
     asyncio.run(go())
@@ -289,5 +291,5 @@ def test_no_voices_without_a_delivered_alert():
     bot, fake, _, _ = make()
     fake.fail["send_photo"] = BadRequest("x")
     fake.fail["send_message"] = BadRequest("y")
-    asyncio.run(bot.alert("a1", b"jpeg", voices=[("voice", b"ogg1")]))
+    asyncio.run(bot.alert("a1", b"jpeg", voices=[("voice", b"ogg1", "x")]))
     assert kinds(fake) == []
