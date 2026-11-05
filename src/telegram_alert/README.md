@@ -77,7 +77,7 @@ Rules:
   A frame that can't be made into a JPEG (a broken `cv_bridge` or `cv2`, or
   an encoding other than `bgr8`, `rgb8`, `mono8` or `yuv422_yuy2`) gets
   "(camera image failed)". If the photo upload fails or stalls, the alert is
-  sent as text instead, normally early in the 30 s. That isn't guaranteed:
+  sent as text instead, normally early in the 40 s. That isn't guaranteed:
   the 8 s limit is on each network write, not on the whole send, and connect
   and reply waits come on top. If a slow photo still arrives, it has the same
   buttons: the first press on either copy counts, and the other answers
