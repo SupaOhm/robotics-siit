@@ -105,7 +105,7 @@ and the direction from ±90° to the sides; ultrasonic sees the front only.
 
 | Topic | Type | From → To | Meaning |
 |---|---|---|---|
-| `/camera/image_raw` | `sensor_msgs/Image` | camera driver → detector, telegram | Onboard camera (D21). On the robot (5 Nov): USB webcam, 640x480, `yuv422_yuy2`, 8 to 10 Hz, from `usb_cam` on `/dev/video0` |
+| `/camera/image_raw` | `sensor_msgs/Image` | camera driver → detector, telegram | Onboard camera (D21). On the robot (5 Nov): USB webcam, 640x480, `yuv422_yuy2`, 8 to 10 Hz (about 15 Hz after a second reboot), from `usb_cam` on `/dev/video0` |
 | `/detect/request` | `std_msgs/String` | state_machine → detector_node | Request id. Classify what is in front now (D7) |
 | `/detect/result` | `std_msgs/String` (JSON) | detector_node → state_machine | At most one reply per request, with the same `id`; none if there's no camera frame or YOLO fails (D8) |
 
