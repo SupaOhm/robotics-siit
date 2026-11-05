@@ -42,7 +42,7 @@ for pkg in ("password_system", "telegram_alert", "audio_player"):
 from password_system.speech import vosk_candidates, vosk_grammar  # noqa: E402
 from password_system.verifier import PasswordVerifier, parse_stored  # noqa: E402
 
-RATE = 44100   # the USB mic's own rate, as password_node opens it
+RATE = 48000   # the USB mic at 44100 really delivers ~24,300 samples/s (1.8x fast)
 CHUNK = 1024   # SpeechRecognition's chunk size
 CHUNK_S = CHUNK / RATE
 CLIPPED = 32700

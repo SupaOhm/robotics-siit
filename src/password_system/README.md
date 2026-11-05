@@ -139,6 +139,13 @@ in [config/password.yaml](config/password.yaml):
 python3 -c "import speech_recognition as sr; print(list(enumerate(sr.Microphone.list_microphone_names())))"
 ```
 
+**Check the mic's sample rate.** The robot's USB mic (C-Media) offers
+44100 and 48000 Hz, but at 44100 it really delivers only about 24,300
+samples a second. Speech is then stored 1.8x fast and high-pitched, and
+Vosk hears "oh" or "how how" for "hello". `mic_sample_rate: 48000` fixes
+it. For a new mic, `tools/mic_check.py` sends test recordings to Telegram
+so you can hear them.
+
 **Fallback engine:** `engine:=google` uses Google Web Speech instead. It
 needs the hotspot's internet, and it's unofficial and can fail. Only use it
 if Vosk does badly in the venue.
@@ -175,6 +182,7 @@ clips and results each step publishes, and Vosk / Google result parsing.
 | `match_mode` | `exact` | Keep `exact`. `contains` lets one attempt test many codes |
 | `max_service_errors` | 3 | Mic or engine failures before handing over to the operator |
 | `mic_device_index` | -1 | The wrong microphone is used |
+| `mic_sample_rate` | 48000 | The recording sounds sped up and high-pitched (wrong rate). 0 = the device's default |
 | `sim_timeout` | 8.5 s | Sim only: time to type an attempt before it counts as silence |
 | `energy_threshold` | 0 (measure at start-up) | Digits get cut off or silence is taken as speech. The node logs the value it measured; set a fixed one if the room's noise changes after start-up |
 

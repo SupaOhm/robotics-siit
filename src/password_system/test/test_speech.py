@@ -80,3 +80,21 @@ def test_free_speech_has_no_grammar():
     assert vosk_grammar("", free_speech=True) is None
     assert vosk_grammar("anything", free_speech=True) is None
     assert "six" in json.loads(vosk_grammar())
+
+
+def test_mic_opens_at_the_configured_rate(monkeypatch, tmp_path):
+    # The robot's USB mic delivers only ~24,300 samples/s when opened at its
+    # default 44.1 kHz, so speech came out 1.8x fast; 48 kHz is correct
+    import sys
+    from types import SimpleNamespace
+    opened = []
+    fake_sr = SimpleNamespace(
+        Recognizer=lambda: SimpleNamespace(),
+        Microphone=lambda **kw: opened.append(kw) or "mic")
+    monkeypatch.setitem(sys.modules, "speech_recognition", fake_sr)
+    from password_system.speech import SpeechListener
+    listener = SpeechListener(engine="google", device_index=0, sample_rate=48000)
+    assert listener._microphone() == "mic"
+    assert opened == [{"device_index": 0, "sample_rate": 48000}]
+    SpeechListener(engine="google")._microphone()
+    assert opened[-1] == {"device_index": None, "sample_rate": None}  # device default

@@ -49,6 +49,7 @@ class PasswordNode(Node):
         p("engine", "vosk")  # vosk | google
         p("language", "en-US")
         p("mic_device_index", -1)  # -1 = system default microphone
+        p("mic_sample_rate", 0)  # 0 = the device's default; the robot's USB mic needs 48000
         p("vosk_model_path", "")
         p("vosk_free_speech", False)  # hear any English, not only digits and vosk_words
         p("vosk_words", "")  # extra words Vosk may hear, e.g. a word password; set on the robot only
@@ -109,6 +110,7 @@ class PasswordNode(Node):
                 engine=g("engine"),
                 language=g("language"),
                 device_index=None if device < 0 else device,
+                sample_rate=int(g("mic_sample_rate")) or None,
                 listen_timeout=float(g("listen_timeout")),
                 phrase_time_limit=float(g("phrase_time_limit")),
                 vosk_model_path=g("vosk_model_path"),

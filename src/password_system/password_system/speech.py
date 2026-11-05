@@ -71,6 +71,7 @@ class SpeechListener:
         engine: str = "vosk",
         language: str = "en-US",
         device_index: Optional[int] = None,
+        sample_rate: Optional[int] = None,
         listen_timeout: float = 6.0,
         phrase_time_limit: float = 5.0,
         vosk_model_path: str = "",
@@ -86,6 +87,10 @@ class SpeechListener:
         self.engine = engine
         self.language = language
         self.device_index = device_index
+        # None = the device's default. The robot's USB mic needs 48000: at
+        # its default 44100 it delivers only ~24,300 samples/s, so speech is
+        # stored 1.8x fast and Vosk hears a chipmunk
+        self.sample_rate = sample_rate
         self.listen_timeout = listen_timeout
         self.phrase_time_limit = phrase_time_limit
         self.recognizer = sr.Recognizer()
@@ -113,7 +118,7 @@ class SpeechListener:
             self._vosk_model = Model(vosk_model_path)
 
     def _microphone(self):
-        return self._sr.Microphone(device_index=self.device_index)
+        return self._sr.Microphone(device_index=self.device_index, sample_rate=self.sample_rate)
 
     def calibrate(self, seconds: float = 1.0) -> None:
         """Measure background noise to set the (fixed) speech energy threshold.
