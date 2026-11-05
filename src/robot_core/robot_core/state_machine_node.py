@@ -11,9 +11,13 @@ from dataclasses import fields
 import rclpy
 from geometry_msgs.msg import Twist
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile
 from std_msgs.msg import Bool, Empty, Int32, String
 
 from .machine import Settings, StateMachine
+
+# Latched: camera_tilt gets the last angle even if it starts after us
+TILT_QOS = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
 
 EMPTY_TOPICS = ("/avoidance/start", "/avoidance/cancel",
                 "/password/start", "/password/cancel")
@@ -32,7 +36,7 @@ class StateMachineNode(Node):
 
         self.machine = StateMachine(settings, self.now())
         self.pubs = {"/cmd_vel": self.create_publisher(Twist, "/cmd_vel", 10),
-                     "/camera/tilt": self.create_publisher(Int32, "/camera/tilt", 10)}
+                     "/camera/tilt": self.create_publisher(Int32, "/camera/tilt", TILT_QOS)}
         for topic in EMPTY_TOPICS:
             self.pubs[topic] = self.create_publisher(Empty, topic, 10)
         for topic in STRING_TOPICS:

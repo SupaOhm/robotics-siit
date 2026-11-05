@@ -5,6 +5,8 @@ operator can hear them on Telegram. A correct answer contains the password,
 so a granted session drops everything and nothing is ever written.
 """
 
+import glob
+import os
 from typing import List, Tuple
 
 from .verifier import EventType
@@ -34,3 +36,13 @@ class AttemptRecordings:
         if EventType.GRANTED in types:
             self.clear()
         return []
+
+
+def delete_old_recordings(folder: str) -> None:
+    """Delete WAVs left from an earlier session (telegram_node wasn't
+    running to send and delete them). They hold a person's voice."""
+    for path in glob.glob(os.path.join(folder, "*.wav")):
+        try:
+            os.remove(path)
+        except OSError:
+            pass

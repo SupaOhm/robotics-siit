@@ -193,7 +193,7 @@ topic is never used on the robot.
 | Topic | Type | From → To | Meaning |
 |---|---|---|---|
 | `/robot/state` | `std_msgs/String` | state_machine → anyone | Current state, on every change and at 1 Hz (debugging, sim, demo overlay) |
-| `/camera/tilt` | `std_msgs/Int32` | state_machine → camera_tilt | Camera tilt in Yahboom servo units (0–110, higher is up). `tilt_up` (90) in `CHECKPOINT`, `WAIT_OPERATOR` and `BLOCKING`, so the Telegram photo shows the face; `tilt_level` (30) otherwise (D31) |
+| `/camera/tilt` | `std_msgs/Int32` (latched: transient-local QoS) | state_machine → camera_tilt | Camera tilt in Yahboom servo units (0–110, higher is up). `tilt_up` (90) in `CHECKPOINT`, `WAIT_OPERATOR` and `BLOCKING`, so the Telegram photo shows the face; `tilt_level` (30) otherwise (D31) |
 
 `camera_tilt` (`robot_core`) is the only node that imports a Yahboom
 message: it turns `/camera/tilt` into `/Servo`

@@ -30,7 +30,7 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Empty, String
 
-from .recordings import AttemptRecordings
+from .recordings import AttemptRecordings, delete_old_recordings
 from .verifier import PasswordVerifier, outputs_for, parse_stored
 
 
@@ -155,6 +155,7 @@ class PasswordNode(Node):
     def on_start(self, _msg) -> None:
         with self.lock:
             self.recordings.clear()
+            delete_old_recordings(self.recording_dir)
             self._cancel.set()  # stop any session still running
             self._cancel = threading.Event()
             # One result per session: close the old one before starting again

@@ -49,7 +49,7 @@ bring-up checklist is in [robot-setup.md](robot-setup.md).
 | D21 | Detection camera | Robot's onboard camera (also the Telegram photo) | Extra USB webcam at person height | 2 |
 | D22 | Microphone | USB mic on the robot. fah (Lane 4) gets it | Yahboom voice module (often fixed words only); laptop mic | 1, 4 |
 | D23 | What the person says | **Spoken digits, or one spoken word** (changed Nov 5: Vosk missed the digits on the robot's mic). A word is easier to guess, so pick an uncommon one | Fixed passphrase; answer to a question | 1, 4 |
-| D24 | Speech recognition | **Vosk** offline, vocabulary limited to the digits plus `vosk_words` (set on the robot, never in the repo, for a word password). Cloud Whisper API is a good fallback but costs money | Google Web Speech (unofficial, can fail); whisper.cpp on the Pi (slow) | 4 |
+| D24 | Speech recognition | **Vosk** offline. Since Nov 5 **free speech** (`vosk_free_speech: true`): any English, so the Telegram caption shows what was really said and a word password needs no word list in the repo. `false` limits it to the digits plus `vosk_words`. Not yet tried on the robot's mic; noise can come out as random words. Cloud Whisper API is a good fallback but costs money | Google Web Speech (unofficial, can fail); whisper.cpp on the Pi (slow) | 4 |
 | D25 | Voice output | Pre-recorded clips, played with `aplay` | Offline TTS (Piper, espeak) | 4 |
 | D26 | Telegram | `python-telegram-bot`, long polling | `pyTelegramBotAPI`; webhook (needs public HTTPS) | 4 |
 | D27 | Simulation bridge | CoppeliaSim ZeroMQ remote API + a thin ROS 2 node. In sim, typed attempts on `/password/sim_input` stand in for the mic; Telegram is the real bot over the hotspot | simROS2 plugin (compile for our ROS); fake Telegram too | 5 |

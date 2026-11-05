@@ -51,3 +51,14 @@ def test_clear_forgets_a_cancelled_session():
     verifier.submit(["1111"])
     verifier.submit(["1111"])
     assert rec.handle(b"last", verifier.submit(["1111"]), "eleven") == [(b"last", "eleven")]
+
+
+def test_old_recordings_are_deleted_when_a_session_starts(tmp_path):
+    # A denied session's files that telegram_node never picked up (it wasn't
+    # running) must not wait there with someone's voice
+    from password_system.recordings import delete_old_recordings
+    (tmp_path / "old_1.wav").write_bytes(b"voice")
+    (tmp_path / "notes.txt").write_text("keep")
+    delete_old_recordings(str(tmp_path))
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["notes.txt"]
+    delete_old_recordings(str(tmp_path / "missing"))  # no folder yet: fine

@@ -10,6 +10,7 @@ workspace: source it before running this node.
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile
 from std_msgs.msg import Int32
 
 TILT_MAX = 110  # the Yahboom driver clamps s2 to 0-110
@@ -22,7 +23,10 @@ class CameraTiltNode(Node):
         self.ServoControl = ServoControl
         self.pan = int(self.declare_parameter("pan", 90).value)
         self.pub = self.create_publisher(ServoControl, "/Servo", 10)
-        self.create_subscription(Int32, "/camera/tilt", self.on_tilt, 10)
+        # Latched like the state machine's publisher, so starting after it
+        # still gets the current angle
+        latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self.create_subscription(Int32, "/camera/tilt", self.on_tilt, latched)
         self.get_logger().info("camera_tilt ready (pan %d)" % self.pan)
 
     def on_tilt(self, msg):
