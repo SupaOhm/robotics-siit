@@ -70,7 +70,7 @@ people with a password.
 
 - [x] Lane 1: core state machine and gesture command override (`robot_core`, #25)
 - [x] Lane 2 (purin): gesture node on the laptop (`gesture_control`, #14), runs on the operator's Mac
-- [ ] Lane 2 (purin): laptop → robot link over the hotspot; `/gesture/command` received on the robot
+- [x] Lane 2 (purin): laptop → robot link over the hotspot; `/gesture/command` received on the robot
 - [x] Lane 2 (ohm): detector node with the person class and an English name table (3 objects)
 - [ ] Lane 2 (ohm): YOLO running on the robot; name table grown to 5 objects
 - [x] Lane 3: sensor driver, noise filter, avoidance turn logic (`obstacle_avoidance`, #3)
@@ -116,7 +116,7 @@ turns, are under "Still open" in [docs/interfaces.md](docs/interfaces.md).
 | Question | Owner |
 |---|---|
 | Is 0.30 m far enough for the camera to see a person? | ohm |
-| Which laptop runs `gesture_node`? Answer: purin's M1 MacBook, ROS 2 Humble from RoboStack (`tools/mac_ros_setup.sh`). Still to confirm: the link to the robot over the hotspot | purin |
+| Which laptop runs `gesture_node`? Answer: purin's M1 MacBook, ROS 2 Humble from RoboStack (`tools/mac_ros_setup.sh`). Link to the robot over the hotspot confirmed on 5 Nov (#27) | purin |
 | What FPS counts as good enough for gesture control? | Lane 5 |
 | What demo conditions do we test in: lighting, background noise, hotspot? | Lane 5 |
 | Who can answer Telegram alerts: one private chat, or a group of operators? | Lane 4 |
