@@ -167,5 +167,19 @@ The topic contract lives in `docs/interfaces.md` (D5 for this package).
 ## Open questions
 
 1. LiDAR or ultrasonic? D19 says LiDAR if the M1 has one; confirmed at bring-up
-2. Stop and clear distances: 0.30 / 0.40 m are first guesses. Tune them on
-   the robot with the demo obstacles.
+2. Stop and clear distances: 0.30 / 0.40 m from the LiDAR. On the M1 the
+   LiDAR sits near the front of the roof (about 6 cm behind the front edge
+   in Yahboom's drawing), so the robot stops about 0.24 m from the bumper,
+   less what it rolls. Check it on the robot with the demo obstacles.
+
+## Limitations
+
+- **Low objects:** on the M1 the LiDAR beam is about 16 cm above the floor
+  (Yahboom's drawing puts the top of the LiDAR at 181.4 mm). Anything lower,
+  such as a cup, or a laptop on the floor, never stops the robot, so the
+  detector never gets to name it. Use objects taller than 16 cm in the demo.
+- **Clear and dark surfaces:** clear plastic (a Crystal bottle) and matt
+  black can return no reading. `tools/lane3_bringup_check.py` checks a cup
+  and a bottle on the robot.
+- **Front only:** the robot stops for what is ahead. Backing up (`back`)
+  has no obstacle check.

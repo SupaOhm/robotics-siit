@@ -50,9 +50,9 @@ state machine first: the script sends its own turn on `/cmd_vel`.
 | Base driver launch | Command that starts it | `____` |
 | Camera (D21) | Topic name, `ros2 topic hz` rate, resolution. A person stands where the robot stops, then at 0.3 m: does YOLO find `person` by legs or feet? Record each for Lane 2: `ros2 bag record -o person_front /camera/image_raw /cmd_vel` | `____` |
 | Distance sensor (D19) | LiDAR fitted? Model, topic (`/scan`?), rate, which way 0° points, QoS (`ros2 topic info -v /scan`). Else ultrasonic topic | `____` |
-| Low objects (Lanes 2, 3) | Height of the LiDAR beam above the floor. Anything lower never stops the robot, so it is never named. Once `obstacle_avoidance` runs (§4), put a cup, then a bottle, 0.3 m in front: `ros2 topic echo /obstacle/distance` should read about 0.3 | `____` |
-| Size (Lane 3) | Robot width (`corridor_half_width` is half of it plus a margin) and the gap from the LiDAR to the front bumper | `____` |
-| Stopping distance (Lane 3) | Once the state machine runs, drive at `linear_speed` toward a box and measure the gap left in front of the bumper. The robot keeps moving for up to about 0.45 s after the box comes within 0.30 m of the LiDAR: about 13 cm at 0.3 m/s | `____` |
+| Low objects (Lanes 2, 3) | Height of the LiDAR beam above the floor. Anything lower never stops the robot, so it is never named. Once `obstacle_avoidance` runs (§4), put a cup, then a bottle, 0.3 m in front of the bumper: `ros2 topic echo /obstacle/distance` should read about 0.3 plus the LiDAR-to-bumper gap | Beam about 16 cm above the floor (Yahboom drawing: LiDAR top at 181.4 mm) |
+| Size (Lane 3) | Robot width (`corridor_half_width` is half of it plus a margin) and the gap from the LiDAR to the front bumper | Yahboom drawing: 231.4 mm wide, 284.4 mm long, LiDAR near the front of the roof (about 6 cm behind the front edge, to measure) |
+| Stopping distance (Lane 3) | Once the state machine runs, drive at `linear_speed` toward a box and measure the gap left in front of the bumper. The robot keeps moving for up to about 0.45 s after the box comes within `stop_distance` (0.30 m from the LiDAR): about 9 cm at 0.2 m/s | `____` |
 | Microphone (D22) | `arecord -l` lists the USB mic; `arecord -d 3 t.wav && aplay t.wav` is clear | `____` |
 | Voice module | Free speech, or fixed command words only? | `____` |
 | Speaker (D25) | `aplay` a test `.wav` is loud enough at 2 m | `____` |

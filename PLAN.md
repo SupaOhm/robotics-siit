@@ -103,6 +103,7 @@ people with a password.
 | YOLO is too slow on the robot | Benchmark on the robot (Lane 5); run YOLO only when the robot stops (D7); move it to the laptop over the hotspot if needed (D18) |
 | The robot is low, so at 0.30 m the camera may only see feet and a person could skip the password | Floor-level photo test (ohm); if people are missed, add a tilted frame in `CLASSIFY` |
 | Low light hurts gesture and object recognition | Test in demo lighting early (Lane 5) |
+| The LiDAR beam is about 16 cm above the floor (Yahboom's M1 drawing), so a cup, or a laptop on the floor, never stops the robot and is never named. Clear plastic (a Crystal bottle) may not reflect it | Use objects taller than 16 cm in the demo; `tools/lane3_bringup_check.py` tests a cup and a bottle |
 | YOLO doesn't know walls, doors, boxes | They fall back to "Found an obstacle" |
 | Telegram needs internet on the robot | Confirm the phone hotspot works at the demo venue (D17) |
 | A noisy room breaks speech recognition of the spoken password | Test in demo noise early (Lane 5) |
