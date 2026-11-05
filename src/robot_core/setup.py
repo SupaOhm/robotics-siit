@@ -24,6 +24,7 @@ setup(
     entry_points={
         "console_scripts": [
             "state_machine = robot_core.state_machine_node:main",
+            "camera_tilt = robot_core.camera_tilt_node:main",
         ],
     },
 )
