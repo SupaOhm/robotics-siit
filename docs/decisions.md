@@ -64,6 +64,20 @@ bring-up checklist is in [robot-setup.md](robot-setup.md).
 
 D28–D30 were added from Lane 2's review on PR #4.
 
+## D. Checked on the robot (5 Nov)
+
+Results from the robot session (#27). Details in [robot-setup.md](robot-setup.md).
+
+| # | Result | Notes |
+|---|---|---|
+| D16 | **Changed** | Raspberry Pi OS (Debian 12) on the Pi 5, ROS 2 Humble inside Yahboom's Docker container `eager_pascal` (the fallback above). Headless, reached over SSH. Cyclone DDS installed in the container |
+| D17 | Confirmed | Robot and laptop on the phone hotspot; discovery works with Cyclone DDS on domain 42. The image defaults to domain 61, now set to 42 in `/root/run_handle.sh` and `/root/.bashrc` |
+| D18 | Confirmed | YOLO stays on the robot. Time limit per frame: **1.0 s** (#29). `detector_node` replies in 0.13 to 0.27 s including the wait for a frame, about 0.75 s for the first request, inside the 3 s `CLASSIFY` timeout. Gestures on purin's Mac reach the robot at about 10 Hz |
+| D19 | Confirmed | LiDAR fitted: `ydlidar_ros2_driver_node` on `/scan`. Objects below the beam are never seen (Lane 3) |
+| D20 | Confirmed | NCNN export of YOLO11n at 320 px runs in the container (`ultralytics`, `ncnn`, NumPy 1.26.4) |
+| D21 | Confirmed | `/camera/image_raw`: USB webcam, 640x480, 8 to 10 Hz, no depth camera. It sits at floor level, so a person at 0.30 m shows only legs: found in 6 of 6 (shorts) and 4 of 4 (regular trousers), but 2 of 5 for baggy jeans filling the image (Lane 2, open) |
+| D22 | Open | The voice board (sound card 2) has capture and playback and is visible in the container. Recording quality not checked yet (Lane 4) |
+
 ## Changes to PLAN.md (made in this PR)
 
 - Password row of the tech stack: online speech recognition → offline Vosk,

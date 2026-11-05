@@ -8,7 +8,7 @@ the blanks as you go. Other lanes read the results from here.
 
 - [x] Board model (`cat /proc/device-tree/model`): `Raspberry Pi 5 Model B Rev 1.1, 8 GB` (#29)
 - [x] Yahboom image booted, ROS 2 Humble. Version / image name: `Raspberry Pi OS (Debian 12 bookworm) on the host; ROS 2 Humble in the container, image 192.168.2.51:5000/ros-humble-m1:1.1.1`
-- [ ] Desktop switched off (headless), reached over SSH
+- [x] Desktop switched off (headless), reached over SSH
 - [x] Is ROS native or inside Docker? Container name and how to enter: `Docker, container eager_pascal: docker exec -it eager_pascal bash` (from the Pi, not inside the container)
       - The container's main process is `/root/run_handle.sh`. It sets the
         domain (line 13, now `ROS_DOMAIN_ID=42` and CycloneDDS) and starts the
@@ -24,7 +24,7 @@ the blanks as you go. Other lanes read the results from here.
       speaker and camera (`--device /dev/snd --device /dev/video0`): both
       visible in the container; sound card 2 (USB voice board) has capture
       and playback
-- [ ] `ros2 doctor` runs without errors
+- [x] `ros2 doctor` runs without errors
 
 ## 2. Network (D17)
 
