@@ -21,6 +21,10 @@ The message contains a clip ID without the `.wav` extension.
 
 Example: `found_chair`
 
+When a clip finishes (not when interrupted), the node publishes its id on
+`/audio/done` (`std_msgs/String`). `password_node` opens the mic on
+`password_beep` (D33).
+
 ## Available Clips
 
 - found_chair
@@ -32,6 +36,8 @@ Example: `found_chair`
 - found_obstacle
 - password_prompt
 - password_wrong
+- password_countdown ("three, two, one")
+- password_beep (password_node opens the mic as it ends)
 - password_denied
 - photo_countdown
 - password_correct

@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 class AudioPlayer:
-    def __init__(self, cooldown=5.0, clip_dir=None, logger=None):
+    def __init__(self, cooldown=5.0, clip_dir=None, logger=None, on_done=None):
         self.clip_dir = (
             Path(clip_dir)
             if clip_dir is not None
@@ -17,6 +17,7 @@ class AudioPlayer:
         )
         self.cooldown = cooldown
         self.logger = logger
+        self.on_done = on_done  # called with the clip id when a clip ends (D33)
 
         self.queue = deque()
         self.last_found = {}
@@ -159,6 +160,8 @@ class AudioPlayer:
                         with self.condition:
                             self.last_found[clip_id] = time.monotonic()
                     self._log(f"[DONE] {clip_id}", "info")
+                    if self.on_done is not None:
+                        self.on_done(clip_id)
 
             except Exception as error:
                 self._log(f"[ERROR] {clip_id}: {error}", "error")

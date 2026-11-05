@@ -16,4 +16,11 @@ def generate_launch_description():
             output="screen",
             parameters=[config],
         ),
+        Node(
+            package="robot_core",
+            executable="camera_tilt",
+            name="camera_tilt",
+            output="screen",
+            parameters=[config],
+        ),
     ])

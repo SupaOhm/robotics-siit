@@ -30,8 +30,9 @@ def main(argv=None):
                                 args.attempts, args.match)
     listener = SpeechListener(engine=args.engine, language=args.language,
                               device_index=args.device, vosk_model_path=args.vosk_model)
-    print("Calibrating for background noise, stay quiet...")
-    listener.calibrate()
+    if args.engine == "google":
+        print("Calibrating for background noise, stay quiet...")
+        listener.calibrate()
 
     try:
         while True:
@@ -50,6 +51,8 @@ def main(argv=None):
                         print("  DENIED: alert + Telegram would start here")
     except (KeyboardInterrupt, EOFError):
         print()
+    finally:
+        listener.close_mic()
 
 
 if __name__ == "__main__":

@@ -299,7 +299,9 @@ def test_decision_for_old_alert_ignored(r):
 
 def test_operator_timeout_blocks_with_new_id(r):
     r.to_wait_operator()
-    r.wait(30.0)
+    r.wait(39.9)
+    assert r.m.state == WAIT_OPERATOR  # 40 s, so the photo countdown leaves time
+    r.wait(0.2)
     assert r.m.state == BLOCKING
     assert r.sent("/telegram/blocking") == ["a2"]
 
@@ -376,3 +378,46 @@ def test_back_broken_by_another_gesture_restarts_the_hold(r):
     r.gesture = "back"
     r.wait(0.6)
     assert r.m.state == CHECKPOINT
+
+
+# Camera tilt (D31)
+
+def test_camera_tilts_up_for_the_person(r):
+    r.to_classify()
+    assert r.sent("/camera/tilt") == [30]  # level for the detector
+    r.send("on_detect_result", {"id": "d1", "kind": "person"})
+    assert r.sent("/camera/tilt") == [30, 90]
+
+
+def test_camera_stays_up_through_the_operator_and_blocking(r):
+    r.to_blocking()
+    assert r.sent("/camera/tilt") == [30, 90]
+
+
+@pytest.mark.parametrize("leave", ["granted", "walk_away", "back", "resume"])
+def test_camera_back_to_level_when_the_person_is_done(r, leave):
+    if leave == "granted":
+        r.to_checkpoint()
+        r.send("on_password_result", "granted")  # PASS
+    elif leave == "walk_away":
+        r.to_checkpoint()
+        r.obstacle = False
+        r.wait(5.1)  # DRIVE (D29)
+    elif leave == "back":
+        r.to_wait_operator()
+        r.gesture = "back"
+        r.wait(1.2)  # DRIVE (D11)
+    else:
+        bid = r.to_blocking()
+        r.send("on_telegram_decision", {"id": bid, "decision": "resume"})  # AVOID
+    assert r.m.state != CHECKPOINT
+    assert r.sent("/camera/tilt")[-1] == 30
+
+
+def test_camera_level_for_objects(r):
+    r.to_classify()
+    r.send("on_detect_result", {"id": "d1", "kind": "object", "label": "chair",
+                                "clip": "found_chair"})
+    r.wait(2.1)
+    assert r.m.state == AVOID
+    assert r.sent("/camera/tilt") == [30]

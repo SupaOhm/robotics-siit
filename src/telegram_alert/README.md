@@ -3,7 +3,7 @@
 `telegram_node`: when a person fails the spoken password 3 times, the state
 machine asks this node to send the operator a **photo of the person** on
 Telegram with **Allow** / **Deny** buttons. The operator's answer goes back
-to the state machine. If nobody answers in 30 s, the robot keeps blocking,
+to the state machine. If nobody answers in 40 s, the robot keeps blocking,
 and the node offers a **Resume** button to end the block.
 
 This follows the contract in `docs/interfaces.md` (v0.3: D11, D14, D15,
@@ -14,15 +14,17 @@ is needed.
 
 | Topic | Type | Direction | Meaning |
 |---|---|---|---|
-| `/telegram/alert` | `std_msgs/String` | in | Alert id, e.g. `a3`. Send the latest camera frame with **Allow** / **Deny** |
-| `/telegram/blocking` | `std_msgs/String` | in | A **new** alert id. Deny or 30 s timeout happened: send "Robot is blocking" with **Resume** |
+| `/telegram/alert` | `std_msgs/String` | in | Alert id, e.g. `a3`. Play the countdown, then send the latest camera frame with **Allow** / **Deny** |
+| `/telegram/blocking` | `std_msgs/String` | in | A **new** alert id. Deny or 40 s timeout happened: send "Robot is blocking" with **Resume** |
 | `/telegram/decision` | `std_msgs/String` (JSON) | out | `{"id": "a3", "decision": "allow"}`. `decision` is `allow`, `deny` or `resume` |
 | `/robot/state` | `std_msgs/String` | in | Leaving `WAIT_OPERATOR` or `BLOCKING` (e.g. the operator held `back`) closes that state's buttons |
+| `/audio/play` | `std_msgs/String` | out | `photo_countdown`, played on each alert |
+| `/password/recording` | `std_msgs/String` (JSON) | in | `{"path", "heard"}`: a failed password answer. Sent with the next alert as a voice reply to its card, captioned with what was heard, then deleted (D32). Needs `ffmpeg` for voice messages; without it the WAV goes as a file |
 | `/camera/image_raw` | `sensor_msgs/Image` | in | Camera frames. Only the latest is kept, as raw bytes; it is decoded only when an alert comes in |
 
-**The 30 s timeout is in the state machine (D15), not here.** When it runs
+**The 40 s timeout is in the state machine (D15), not here.** When it runs
 out, the state machine sends `/telegram/blocking`. This node then removes
-the old Allow / Deny buttons and marks that message "⌛ No answer in 30 s:
+the old Allow / Deny buttons and marks that message "⌛ No answer in 40 s:
 treated as Deny".
 
 What the operator sees:
@@ -30,13 +32,28 @@ What the operator sees:
 ```
 🚨 Checkpoint: this person did not pass the password check.   [photo]
 Alert a3 at 14:02:11
-Allow this person to pass? No answer in 30 s = Deny.
-[ ✅ Allow ] [ ⛔ Deny ]
+Allow this person to pass? No answer in 19 s = Deny.
+[ ✅ Allow ] [ ⛔ Deny ] [ 📷 Retake ]
 ```
 
 The text doesn't say "3 wrong passwords", because the robot also asks the
-operator when the password check gets no result in 60 s (D30). The "30 s"
-comes from `operator_timeout`; keep it equal to the state machine's.
+operator when the password check gets no result in 60 s (D30). The "19 s"
+is the time left: `operator_timeout`, which must equal the state machine's,
+minus `photo_delay`.
+
+The robot warns the person first. On `/telegram/alert` the node plays
+`photo_countdown` and waits `photo_delay` (10.5 s: 3.3 s of `password_denied`, then
+the 6.1 s countdown, plus a margin) before it takes the photo, so the card arrives
+after that. There's
+no signal when a clip ends, so set `photo_delay` from the real clip length. If
+the robot leaves `WAIT_OPERATOR` during the wait, no card is sent.
+
+**Retake** plays the countdown again, waits `retake_delay`, and replaces the
+photo on the same card. A card sent as text moves to a new photo message. The
+operator's timeout keeps running, a second press during a countdown gets
+"Retake already running", and Allow or Deny still work at once. If the new
+photo fails, the old one stays with "(retake failed)". Only the Allow / Deny
+card has this button: in `BLOCKING` the `alert` clip would cut the countdown off.
 
 After a press, the buttons disappear, the message shows "✅ Allowed by
 @name" (or Denied / Resumed), and the decision is published at once.
@@ -60,7 +77,7 @@ Rules:
   A frame that can't be made into a JPEG (a broken `cv_bridge` or `cv2`, or
   an encoding other than `bgr8`, `rgb8`, `mono8` or `yuv422_yuy2`) gets
   "(camera image failed)". If the photo upload fails or stalls, the alert is
-  sent as text instead, normally early in the 30 s. That isn't guaranteed:
+  sent as text instead, normally early in the 40 s. That isn't guaranteed:
   the 8 s limit is on each network write, not on the whole send, and connect
   and reply waits come on top. If a slow photo still arrives, it has the same
   buttons: the first press on either copy counts, and the other answers

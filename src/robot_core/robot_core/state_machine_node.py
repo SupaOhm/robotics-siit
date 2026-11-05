@@ -11,9 +11,13 @@ from dataclasses import fields
 import rclpy
 from geometry_msgs.msg import Twist
 from rclpy.node import Node
-from std_msgs.msg import Bool, Empty, String
+from rclpy.qos import DurabilityPolicy, QoSProfile
+from std_msgs.msg import Bool, Empty, Int32, String
 
 from .machine import Settings, StateMachine
+
+# Latched: camera_tilt gets the last angle even if it starts after us
+TILT_QOS = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
 
 EMPTY_TOPICS = ("/avoidance/start", "/avoidance/cancel",
                 "/password/start", "/password/cancel")
@@ -31,7 +35,8 @@ class StateMachineNode(Node):
         rate = float(self.declare_parameter("tick_rate", 10.0).value)
 
         self.machine = StateMachine(settings, self.now())
-        self.pubs = {"/cmd_vel": self.create_publisher(Twist, "/cmd_vel", 10)}
+        self.pubs = {"/cmd_vel": self.create_publisher(Twist, "/cmd_vel", 10),
+                     "/camera/tilt": self.create_publisher(Int32, "/camera/tilt", TILT_QOS)}
         for topic in EMPTY_TOPICS:
             self.pubs[topic] = self.create_publisher(Empty, topic, 10)
         for topic in STRING_TOPICS:
@@ -56,6 +61,9 @@ class StateMachineNode(Node):
 
         self.create_timer(1.0 / rate, lambda: self.run(m.tick))
         self.create_timer(1.0, self.publish_state)  # 1 Hz, on top of every change
+        # The camera may have been left up: start level (D31)
+        m.tilt = int(settings.tilt_level)
+        self.publish([("/camera/tilt", m.tilt)])
         self.get_logger().info("state_machine ready in %s" % m.state)
 
     def now(self):
@@ -78,6 +86,8 @@ class StateMachineNode(Node):
             if topic == "/cmd_vel":
                 msg = Twist()
                 msg.linear.x, msg.angular.z = data
+            elif topic == "/camera/tilt":
+                msg = Int32(data=data)
             elif topic in EMPTY_TOPICS:
                 msg = Empty()
             else:
