@@ -73,7 +73,7 @@ package name `password_system` (Lane 4).
 ### Obstacles and avoidance (Lane 3, D5)
 
 Lane 3's `obstacle_avoidance` topics, with one change to
-`/obstacle/detected` (fixed rate, safe start; needs PR #3). The A1 has
+`/obstacle/detected` (fixed rate, safe start; needs PR #3). The M1 has
 mecanum wheels, so `AVOID` turns in place.
 
 | Topic | Type | From → To | Meaning |
