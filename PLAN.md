@@ -63,7 +63,7 @@ people with a password.
 
 - [x] Lane 1: define ROS nodes, topics and message types in `docs/interfaces.md`
 - [ ] Lane 1: install OS / ROS 2 on the robot, confirm hardware works (including the microphone and voice module, for the spoken password)
-- [ ] Lane 5: benchmark YOLO on the robot, lock the time limit per frame (gestures run on the laptop, D18)
+- [x] Lane 5: benchmark YOLO on the robot, lock the time limit per frame (gestures run on the laptop, D18) (`docs/benchmark-yolo.md`)
 - [ ] Lane 6: draft the system architecture document
 
 ### Phase 2: Parallel development (Oct 31 – Nov 3)
@@ -117,7 +117,7 @@ turns, are under "Still open" in [docs/interfaces.md](docs/interfaces.md).
 |---|---|
 | Is 0.30 m far enough for the camera to see a person? | ohm |
 | Which laptop runs `gesture_node`? Answer: purin's M1 MacBook, ROS 2 Humble from RoboStack (`tools/mac_ros_setup.sh`). Still to confirm: the link to the robot over the hotspot | purin |
-| What FPS counts as good enough for gesture control? | Lane 5 |
+| What FPS counts as good enough for gesture control? Answer: at least 10 FPS, 15 FPS target ([docs/benchmark-yolo.md](docs/benchmark-yolo.md)). Still to measure on purin's Mac | Lane 5 |
 | What demo conditions do we test in: lighting, background noise, hotspot? | Lane 5 |
 | Who can answer Telegram alerts: one private chat, or a group of operators? | Lane 4 |
 | Does the report document the original gesture-password design as a change, or only the final spoken-password design? | Lane 6 |
