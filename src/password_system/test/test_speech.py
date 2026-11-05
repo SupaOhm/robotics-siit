@@ -98,3 +98,36 @@ def test_mic_opens_at_the_configured_rate(monkeypatch, tmp_path):
     assert opened == [{"device_index": 0, "sample_rate": 48000}]
     SpeechListener(engine="google")._microphone()
     assert opened[-1] == {"device_index": None, "sample_rate": None}  # device default
+
+
+def test_check_uses_digits_and_free_speech_only_fills_the_caption(monkeypatch, tmp_path):
+    # Nov 5: free speech misheard accented "hello"; the check listens for
+    # digits only, and a second free-speech pass is kept for Telegram
+    import sys
+    from types import SimpleNamespace
+    grammars = []
+
+    class Rec:
+        def __init__(self, model, rate, *grammar):
+            grammars.append(grammar[0] if grammar else None)
+            self.free = not grammar
+
+        def SetMaxAlternatives(self, n):
+            pass
+
+        def AcceptWaveform(self, data):
+            pass
+
+        def FinalResult(self):
+            return json.dumps({"text": "seven eleven" if self.free else "seven"})
+
+    monkeypatch.setitem(sys.modules, "speech_recognition",
+                        SimpleNamespace(Recognizer=lambda: SimpleNamespace()))
+    monkeypatch.setitem(sys.modules, "vosk", SimpleNamespace(
+        KaldiRecognizer=Rec, Model=lambda path: "model", SetLogLevel=lambda n: None))
+    from password_system.speech import SpeechListener
+    listener = SpeechListener(engine="vosk", vosk_model_path=str(tmp_path), vosk_free_speech=True)
+    audio = SimpleNamespace(get_raw_data=lambda **kw: b"")
+    assert listener.transcribe(audio) == ["seven"]
+    assert listener.free_text(audio) == "seven eleven"
+    assert json.loads(grammars[0]) == json.loads(VOSK_GRAMMAR) and grammars[1] is None

@@ -51,7 +51,7 @@ class PasswordNode(Node):
         p("mic_device_index", -1)  # -1 = system default microphone
         p("mic_sample_rate", 0)  # 0 = the device's default; the robot's USB mic needs 48000
         p("vosk_model_path", "")
-        p("vosk_free_speech", False)  # hear any English, not only digits and vosk_words
+        p("vosk_free_speech", False)  # also transcribe any English, for the Telegram caption only
         p("vosk_words", "")  # extra words Vosk may hear, e.g. a word password; set on the robot only
         p("listen_delay", 2.5)  # before a retry with no countdown (engine failure)
         p("countdown_timeout", 10.0)  # no /audio/done for the countdown -> listen anyway
@@ -261,6 +261,8 @@ class PasswordNode(Node):
                     self.get_logger().warning(result.error)
                 events = self.verifier.handle(result)
                 heard = result.candidates[0] if result.candidates else ""
+                if result.free_text:
+                    heard = "%s (said: %s)" % (heard or "no digit", result.free_text)
                 self.publish_recordings(self.recordings.handle(result.wav, events, heard))
                 self.publish(events)
                 if not self.verifier.active:

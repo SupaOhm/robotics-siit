@@ -42,6 +42,7 @@ class ListenResult:
     candidates: List[str] = field(default_factory=list)
     error: str = ""
     wav: bytes = b""               # the answer as heard, for the operator (D32)
+    free_text: str = ""            # free-speech transcript, for the caption only (D24)
 
 
 def google_candidates(response) -> List[str]:
@@ -104,7 +105,11 @@ class SpeechListener:
         # Google only: give up on a dropped connection instead of hanging
         self.recognizer.operation_timeout = operation_timeout
 
-        self._grammar = vosk_grammar(vosk_words, vosk_free_speech)
+        # The check always listens for digits (+ vosk_words): free speech
+        # misheard accented speech on the robot (Nov 5). vosk_free_speech only
+        # adds a second pass for the Telegram caption (D24)
+        self._grammar = vosk_grammar(vosk_words)
+        self.free_speech = vosk_free_speech
         self._vosk_model = None
         if engine == "vosk":
             # No download at startup: the venue may have no internet.
@@ -142,7 +147,8 @@ class SpeechListener:
 
         wav = audio.get_wav_data(convert_rate=16000, convert_width=2)
         try:
-            return ListenResult("speech", self.transcribe(audio), wav=wav)
+            free = self.free_text(audio) if self.free_speech else ""
+            return ListenResult("speech", self.transcribe(audio), wav=wav, free_text=free)
         except sr.UnknownValueError:
             return ListenResult("speech", [], wav=wav)
         except Exception as e:  # RequestError, no flac binary, ...
@@ -160,3 +166,15 @@ class SpeechListener:
         rec.SetMaxAlternatives(3)
         rec.AcceptWaveform(audio.get_raw_data(convert_rate=16000, convert_width=2))
         return vosk_candidates(rec.FinalResult())
+
+    def free_text(self, audio) -> str:
+        """What was said, in any English words (Vosk without a word list).
+        For the operator's caption only, never for the check."""
+        if self.engine != "vosk":
+            return ""
+        from vosk import KaldiRecognizer
+        rec = KaldiRecognizer(self._vosk_model, 16000)
+        rec.SetMaxAlternatives(3)
+        rec.AcceptWaveform(audio.get_raw_data(convert_rate=16000, convert_width=2))
+        found = vosk_candidates(rec.FinalResult())
+        return found[0] if found else ""

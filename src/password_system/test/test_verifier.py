@@ -209,3 +209,23 @@ def test_no_countdown_when_nothing_more_is_asked():
     v.submit(["1111"])
     v.submit(["2222"])
     assert "password_countdown" not in outputs_for(v.submit(["3333"]))[1]
+
+
+def first_mode(password):
+    h, salt, n = parse_stored(make_stored(password, "salt"))
+    return PasswordVerifier(h, salt, n, match_mode="first")
+
+
+def test_first_mode_takes_the_first_digits_heard():
+    # A 1-digit password (Nov 5): a repeat or a trailing word still passes,
+    # another digit first does not
+    v = first_mode("7")
+    assert v.matches("seven") and v.matches("seven seven") and v.matches("7 oh")
+    assert not v.matches("one seven") and not v.matches("six")
+
+
+def test_first_mode_works_for_a_longer_password_too():
+    # Going back to 4 digits needs only a new hash
+    v = first_mode("4719")
+    assert v.matches("four seven one nine") and v.matches("4719 4719")
+    assert not v.matches("four seven one")

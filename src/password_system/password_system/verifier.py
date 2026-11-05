@@ -32,7 +32,7 @@ class EventType(str, Enum):
     CANCELLED = "cancelled"        # stopped from outside (e.g. person left)
 
 
-MATCH_MODES = ("contains", "exact")
+MATCH_MODES = ("contains", "exact", "first")
 
 # What the state machine reads on /password/result (docs/interfaces.md)
 RESULT_FOR_EVENT = {
@@ -151,10 +151,14 @@ class PasswordVerifier:
         return hmac.compare_digest(hash_password(normalized, self._salt), self._hash)
 
     def matches(self, text: str) -> bool:
-        """True if ``text`` is (or, in contains mode, includes) the password."""
+        """True if ``text`` is the password (exact), includes it (contains),
+        or starts with it (first: the first N characters heard, N = the
+        password's length, so "seven seven" passes a 1-digit 7)."""
         heard = normalize(text)
         if self.match_mode == "exact":
             return self._is_hit(heard)
+        if self.match_mode == "first":
+            return self._is_hit(heard[:self.password_chars])
         n = self.password_chars
         return any(self._is_hit(heard[i:i + n]) for i in range(len(heard) - n + 1))
 

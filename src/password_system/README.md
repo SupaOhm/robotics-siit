@@ -179,7 +179,7 @@ clips and results each step publishes, and Vosk / Google result parsing.
 | `listen_delay` | 2.5 s | The robot records its own prompt (raise it) |
 | `listen_timeout` | 6 s | People need longer before they start talking |
 | `phrase_time_limit` | 5 s | Answers get cut off |
-| `match_mode` | `exact` | Keep `exact`. `contains` lets one attempt test many codes |
+| `match_mode` | `first` | `first`: the first N digits heard (N = password length), so a repeat still passes. `exact`: the whole answer must be the password. Never `contains`: it lets one attempt test many codes |
 | `max_service_errors` | 3 | Mic or engine failures before handing over to the operator |
 | `mic_device_index` | -1 | The wrong microphone is used |
 | `mic_sample_rate` | 48000 | The recording sounds sped up and high-pitched (wrong rate). 0 = the device's default |

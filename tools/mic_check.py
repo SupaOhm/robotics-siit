@@ -21,6 +21,11 @@ password_node stopped (only one program can open the mic):
 
   python3 tools/mic_check.py --env-file .env                 # 3 tries at the current gain
   python3 tools/mic_check.py --env-file .env --gain 40,60,80,100 --tries 2
+  python3 tools/mic_check.py --env-file .env --digits        # "Say zero" ... "Say nine"
+
+--digits asks for each digit in turn (clips in tools/clips/), checks with
+the digits-only word list as password_node does, and ends with a summary
+table on Telegram: which digits this voice and accent are heard right.
 """
 
 import argparse
@@ -39,7 +44,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 for pkg in ("password_system", "telegram_alert", "audio_player"):
     sys.path.insert(0, os.path.join(ROOT, "src", pkg))
 
-from password_system.speech import vosk_candidates, vosk_grammar  # noqa: E402
+from password_system.normalize import normalize  # noqa: E402
+from password_system.speech import DIGIT_WORDS, vosk_candidates, vosk_grammar  # noqa: E402
 from password_system.verifier import PasswordVerifier, parse_stored  # noqa: E402
 
 RATE = 48000   # the USB mic at 44100 really delivers ~24,300 samples/s (1.8x fast)
@@ -52,7 +58,8 @@ ONSET_TIMEOUT, PAUSE, PRE_ROLL, PHRASE_LIMIT = 6.0, 0.8, 0.5, 5.0
 
 
 def play(clip, card):
-    path = os.path.join(ROOT, "src", "audio_player", "clips", clip + ".wav")
+    path = clip if clip.endswith(".wav") else os.path.join(
+        ROOT, "src", "audio_player", "clips", clip + ".wav")
     subprocess.run(["aplay", "-q", "-D", "plughw:%d,0" % card, path], check=True, timeout=15)
 
 
@@ -175,8 +182,8 @@ def to16k(raw):
     return audioop.ratecv(raw, 2, 1, RATE, 16000, None)[0]
 
 
-def one_try(mic, model, grammar, threshold, card):
-    play("password_prompt", card)
+def one_try(mic, model, grammar, threshold, card, prompt="password_prompt"):
+    play(prompt, card)
     play("password_countdown", card)
     ended = time.monotonic()  # aplay returns once the clip has played
     mic.flush()
@@ -217,7 +224,9 @@ def levels(raw, threshold):
 
 
 def caption(n, gain, r, verifier, threshold):
-    ok = lambda text: "✅" if verifier and text and verifier.matches(text) else "❌"
+    # No password to compare in --digits mode: the asked digit is the answer
+    ok = lambda text: "" if verifier is None else (
+        "✅" if text and verifier.matches(text) else "❌")
     q = lambda text: '"%s"' % text if text else "nothing"
     l1, t1 = r["logic1"], r["logic1_text"]
     if l1.result == "speech":
@@ -238,6 +247,41 @@ def caption(n, gain, r, verifier, threshold):
             lv["peak_db"], lv["rms_db"], lv["clipped"], lv["noise"], lv["loudest"]),
         "Gap countdown end → listening: %d ms" % (r["gap"] * 1000),
     ])
+
+
+def first_digit(text):
+    digits = [c for c in normalize(text or "") if c.isdigit()]
+    return digits[0] if digits else ""
+
+
+def digit_row(word, r, model):
+    """Asked digit vs the first digit heard, as password_node's check does
+    (Logic 1, digits-only word list), plus Logic 2 and free speech."""
+    want = normalize(word)
+    l1 = r["logic1_text"].get("grammar", "") if r["logic1"].result == "speech" else ""
+    l2 = r["gram2"].heard
+    heard = first_digit(l1) or "-"
+    free = r["logic1_text"].get("free", "") or r["free2"].heard
+    return {"word": word, "want": want, "heard": heard, "ok1": first_digit(l1) == want,
+            "ok2": first_digit(l2) == want, "l2": first_digit(l2) or "-", "free": free}
+
+
+def summary(rows):
+    lines = ["📊 Digit check: asked → heard (Logic 1 = password_node, Logic 2 = Vosk streaming)"]
+    for row in rows:
+        lines.append("%s %s → %s %s · L2 %s %s · said \"%s\"" % (
+            row["want"], row["word"], row["heard"], "✅" if row["ok1"] else "❌",
+            row["l2"], "✅" if row["ok2"] else "❌", row["free"] or "-"))
+    ok1 = sum(r["ok1"] for r in rows)
+    ok2 = sum(r["ok2"] for r in rows)
+    lines.append("Right: Logic 1 %d/%d, Logic 2 %d/%d" % (ok1, len(rows), ok2, len(rows)))
+    return "\n".join(lines)
+
+
+async def send_text(settings, text):
+    from telegram import Bot
+    async with Bot(settings.token) as bot:
+        await bot.send_message(chat_id=settings.chat_id, text=text)
 
 
 async def send(settings, data, kind, text):
@@ -264,7 +308,11 @@ def main():
     ap.add_argument("--words", default="hello", help="extra grammar words (vosk_words)")
     ap.add_argument("--env-file", default=os.path.join(ROOT, ".env"))
     ap.add_argument("--no-telegram", action="store_true")
+    ap.add_argument("--digits", action="store_true",
+                    help='ask "Say zero" ... "Say nine", digits-only word list, summary table')
     args = ap.parse_args()
+    if args.digits:
+        args.words = ""  # the check listens for digits only
 
     import speech_recognition as sr
     from vosk import Model, SetLogLevel
@@ -275,23 +323,30 @@ def main():
     model = Model(args.model)
     grammar = vosk_grammar(args.words)
     stored = os.environ.get("ROBOT_PASSWORD_HASH", "")
-    verifier = PasswordVerifier(*parse_stored(stored)) if stored else None
+    verifier = PasswordVerifier(*parse_stored(stored)) if stored and not args.digits else None
     settings = None if args.no_telegram else load_settings(env_file=args.env_file)
 
     original_gain = get_gain(args.card)
     gains = [int(g) for g in args.gain.split(",") if g.strip()] or [None]
     mic = Mic(args.device)
-    n = 0
+    n, rows = 0, []
     try:
         for gain in gains:
             if gain is not None:
                 set_gain(args.card, gain)
-            for _ in range(args.tries):
+            asks = [w for w in DIGIT_WORDS if w != "oh"] if args.digits else [None] * args.tries
+            for word in asks:
                 n += 1
                 print("try %d: prompt and countdown..." % n, flush=True)
-                r = one_try(mic, model, grammar, args.threshold, args.card)
+                prompt = (os.path.join(ROOT, "tools", "clips", "say_%s.wav" % word)
+                          if word else "password_prompt")
+                r = one_try(mic, model, grammar, args.threshold, args.card, prompt)
                 text = caption(n, gain if gain is not None else get_gain(args.card),
                                r, verifier, args.threshold)
+                if word:
+                    row = digit_row(word, r, model)
+                    rows.append(row)
+                    text = "Asked: %s → heard %s\n" % (word, row["heard"]) + text
                 print(text + "\n", flush=True)
                 if settings is not None:
                     wav = sr.AudioData(r["raw"], RATE, 2).get_wav_data(convert_rate=16000,
@@ -302,6 +357,11 @@ def main():
                     except Exception as e:  # keep testing even if one send fails
                         print("telegram send failed: %r" % e, flush=True)
                 time.sleep(1.0)
+        if rows:
+            table = summary(rows)
+            print(table, flush=True)
+            if settings is not None:
+                asyncio.run(asyncio.wait_for(send_text(settings, table), 30))
     finally:
         mic.close()
         if original_gain is not None:
