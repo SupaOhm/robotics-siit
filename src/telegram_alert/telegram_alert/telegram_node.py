@@ -50,7 +50,7 @@ class TelegramNode(Node):
         p("jpeg_quality", 85)
         p("max_image_age", 2.0)  # older frames are still sent, with a note
         p("operator_timeout", 30)  # the state machine's WAIT_OPERATOR timeout (text only)
-        p("photo_delay", 9.0)  # /telegram/alert to photo: password_denied + countdown clip
+        p("photo_delay", 10.5)  # /telegram/alert to photo: password_denied + countdown clip
         p("env_file", "")  # optional .env with TELEGRAM_* (gitignored)
 
         g = lambda name: self.get_parameter(name).value

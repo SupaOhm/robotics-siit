@@ -31,18 +31,19 @@ What the operator sees:
 ```
 🚨 Checkpoint: this person did not pass the password check.   [photo]
 Alert a3 at 14:02:11
-Allow this person to pass? No answer in 21 s = Deny.
+Allow this person to pass? No answer in 19 s = Deny.
 [ ✅ Allow ] [ ⛔ Deny ]
 ```
 
 The text doesn't say "3 wrong passwords", because the robot also asks the
-operator when the password check gets no result in 60 s (D30). The "21 s"
+operator when the password check gets no result in 60 s (D30). The "19 s"
 is the time left: `operator_timeout`, which must equal the state machine's,
 minus `photo_delay`.
 
 The robot warns the person first. On `/telegram/alert` the node plays
-`photo_countdown` and waits `photo_delay` (9 s: 3.3 s of `password_denied`, then
-the countdown) before it takes the photo, so the card arrives after that. There's
+`photo_countdown` and waits `photo_delay` (10.5 s: 3.3 s of `password_denied`, then
+the 6.1 s countdown, plus a margin) before it takes the photo, so the card arrives
+after that. There's
 no signal when a clip ends, so set `photo_delay` from the real clip length. If
 the robot leaves `WAIT_OPERATOR` during the wait, no card is sent.
 

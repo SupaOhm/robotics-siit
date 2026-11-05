@@ -165,13 +165,13 @@ def test_alert_plays_the_countdown_and_waits_for_the_photo(waiting):
     node.on_alert(SimpleNamespace(data="a1"))
     sys.modules["std_msgs.msg"].String.assert_called_with(data="photo_countdown")
     assert node.audio_pub.publish.call_count == 1
-    assert submitted == [] and FakeTimer.started[0].delay == 9.0
+    assert submitted == [] and FakeTimer.started[0].delay == 10.5
     FakeTimer.started[0].fire()
     assert len(submitted) == 1
 
 
 def test_card_shows_the_time_left_after_the_countdown(node):
-    assert node.bot.book.timeout_s == 21  # 30 s - 9 s
+    assert node.bot.book.timeout_s == 19  # 30 s - 10.5 s
 
 
 def test_robot_leaving_during_the_countdown_skips_the_card(waiting):
