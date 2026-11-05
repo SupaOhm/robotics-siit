@@ -160,7 +160,7 @@ topic is never used on the robot.
 | `password_prompt` | "Say the password" | password_node |
 | `password_wrong` | "Wrong, try again" | password_node |
 | `password_denied` | "Access denied, calling the operator" | password_node (after 3 wrong, or 3 mic or speech engine failures in a row) |
-| `photo_countdown` | "Please step back and look at the camera. Photo in 3, 2, 1" | telegram_node (on `/telegram/alert`) |
+| `photo_countdown` | "Please step back and look at the camera. Photo in 3, 2, 1" | telegram_node (on `/telegram/alert` and **Retake**) |
 | `password_correct` | "Password correct, you may pass" | state_machine (`PASS` after `granted`) |
 | `operator_allowed` | "The operator has allowed you to pass" | state_machine (`PASS` after `allow`) |
 | `alert` | Alert sound | state_machine (`BLOCKING`) |
@@ -170,7 +170,7 @@ topic is never used on the robot.
 
 | Topic | Type | From → To | Meaning |
 |---|---|---|---|
-| `/telegram/alert` | `std_msgs/String` | state_machine → telegram_node | Alert id. Play `photo_countdown`, wait `photo_delay`, then send a photo from `/camera/image_raw` with **Allow** / **Deny** buttons. No card if the robot left `WAIT_OPERATOR` during the wait |
+| `/telegram/alert` | `std_msgs/String` | state_machine → telegram_node | Alert id. Play `photo_countdown`, wait `photo_delay`, then send a photo from `/camera/image_raw` with **Allow** / **Deny** / **Retake** buttons. No card if the robot left `WAIT_OPERATOR` during the wait. **Retake** repeats the countdown and replaces the photo; it sends nothing to the state machine and doesn't restart the timeout |
 | `/telegram/blocking` | `std_msgs/String` | state_machine → telegram_node | A **new** alert id. Deny or timeout happened: send "Robot is blocking" with a **Resume** button |
 | `/telegram/decision` | `std_msgs/String` (JSON) | telegram_node → state_machine | `{"id": "a3", "decision": "allow"}`; `decision` is `allow`, `deny` or `resume` |
 

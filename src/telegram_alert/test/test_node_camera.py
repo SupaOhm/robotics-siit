@@ -199,3 +199,12 @@ def test_a_newer_alert_replaces_one_still_counting_down(waiting):
     for timer in FakeTimer.started:
         timer.fire()
     assert len(submitted) == 1
+
+
+def test_retake_plays_the_countdown_then_sends_a_new_photo(waiting):
+    node, submitted = waiting
+    node.start_retake("card")
+    assert node.audio_pub.publish.call_count == 1
+    assert FakeTimer.started[0].delay == 5.5 and submitted == []
+    FakeTimer.started[0].fire()
+    assert len(submitted) == 1

@@ -8,7 +8,7 @@ Follows docs/interfaces.md (contract v0.3, D11, D14, D15, D26):
   sub  /robot/state        String  leaving WAIT_OPERATOR / BLOCKING closes old buttons
   sub  <image_topic>       Image   latest camera frame, used for the photo
   pub  /telegram/decision  String  JSON {"id": "a3", "decision": "allow"|"deny"|"resume"}
-  pub  /audio/play         String  photo_countdown
+  pub  /audio/play         String  photo_countdown (each alert, each Retake press)
 
 The 30 s timeout is in the state machine; this node only shows it.
 ROS spins in a background thread; the Telegram bot runs on asyncio in the
@@ -51,6 +51,7 @@ class TelegramNode(Node):
         p("max_image_age", 2.0)  # older frames are still sent, with a note
         p("operator_timeout", 30)  # the state machine's WAIT_OPERATOR timeout (text only)
         p("photo_delay", 9.0)  # /telegram/alert to photo: password_denied + countdown clip
+        p("retake_delay", 5.5)  # Retake press to photo: the countdown clip
         p("env_file", "")  # optional .env with TELEGRAM_* (gitignored)
 
         g = lambda name: self.get_parameter(name).value
@@ -58,6 +59,7 @@ class TelegramNode(Node):
         self.jpeg_quality = int(g("jpeg_quality"))
         self.max_image_age = float(g("max_image_age"))
         self.photo_delay = float(g("photo_delay"))
+        self.retake_delay = float(g("retake_delay"))
 
         self._last_image = None  # (serialized Image bytes, monotonic time received)
         self._robot_state = None
@@ -79,7 +81,8 @@ class TelegramNode(Node):
         # The card goes out after the countdown, so it shows the time left.
         time_left = max(int(g("operator_timeout") - self.photo_delay), 1)
         self.bot = AlertBot(settings, self.publish_decision, log=log.info,
-                            warn=log.warning, timeout_s=time_left)
+                            warn=log.warning, timeout_s=time_left,
+                            on_retake=self.start_retake)
 
     def publish_decision(self, decision: dict) -> None:
         self.decision_pub.publish(String(data=json.dumps(decision)))
@@ -148,6 +151,17 @@ class TelegramNode(Node):
             self._waiting_alert = None
             self.get_logger().info("alert %s (photo: %s)" % (alert_id, "yes" if jpeg else "no"))
             self.submit(lambda: self.bot.alert(alert_id, jpeg, note))
+
+    def start_retake(self, card) -> None:
+        """Retake was pressed. Runs on the bot's loop, so it must not block."""
+        self.audio_pub.publish(String(data=COUNTDOWN_CLIP))
+        timer = threading.Timer(self.retake_delay, self.send_retake, args=(card,))
+        timer.daemon = True
+        timer.start()
+
+    def send_retake(self, card) -> None:
+        jpeg, note = self.snapshot()
+        self.submit(lambda: self.bot.retake(card, jpeg, note))
 
     def on_blocking(self, msg) -> None:
         alert_id = msg.data.strip()

@@ -14,7 +14,7 @@ def test_alert_card_has_allow_and_deny():
     closes, card = book.new_alert("a1", "12:00:00")
     assert closes == []
     assert card.kind == ALERT
-    assert [parse_callback(d)[:2] for _, d in card.buttons] == [("allow", "a1"), ("deny", "a1")]
+    assert [parse_callback(d)[:2] for _, d in card.buttons] == [("allow", "a1"), ("deny", "a1"), ("retake", "a1")]
     assert "a1" in card.text and "30 s" in card.text
 
 
@@ -201,3 +201,32 @@ def test_old_cards_are_forgotten():
         book.new_alert("a%d" % i, "t")
     assert len(book.cards) == 50
     assert all(c.alert_id != "a0" for c in book.cards.values())
+
+
+def test_retake_leaves_the_card_open_and_decides_nothing():
+    book = AlertBook()
+    _, card = book.new_alert("a1", "12:00:00")
+    result = book.press(button(card, "retake"), 1, "op")
+    assert result.retake is card and result.decision is None and result.close is None
+    assert card.open and card.retaking
+
+
+def test_second_retake_during_a_countdown_is_refused():
+    book = AlertBook()
+    _, card = book.new_alert("a1", "12:00:00")
+    book.press(button(card, "retake"), 1, "op")
+    result = book.press(button(card, "retake"), 1, "op")
+    assert result.retake is None and "already running" in result.toast
+
+
+def test_retake_needs_an_allowed_user():
+    book = AlertBook(allowed_users=[1])
+    _, card = book.new_alert("a1", "12:00:00")
+    assert book.press(button(card, "retake"), 2, "other").retake is None
+
+
+def test_blocking_card_has_no_retake():
+    book = AlertBook()
+    _, card = book.new_blocking("a2", "12:00:00")
+    result = book.press("retake:%s:a2" % card.token, 1, "op")
+    assert result.retake is None and result.toast == "Unknown button"

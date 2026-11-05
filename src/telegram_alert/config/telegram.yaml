@@ -9,3 +9,4 @@ telegram_node:
     operator_timeout: 30               # match the state machine's WAIT_OPERATOR timeout
     photo_delay: 9.0                   # seconds from /telegram/alert to the photo: password_denied
                                        # (3.3 s) + photo_countdown; set it from the real clip
+    retake_delay: 5.5                  # seconds from a Retake press to the photo: photo_countdown

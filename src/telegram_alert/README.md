@@ -32,7 +32,7 @@ What the operator sees:
 🚨 Checkpoint: this person did not pass the password check.   [photo]
 Alert a3 at 14:02:11
 Allow this person to pass? No answer in 21 s = Deny.
-[ ✅ Allow ] [ ⛔ Deny ]
+[ ✅ Allow ] [ ⛔ Deny ] [ 📷 Retake ]
 ```
 
 The text doesn't say "3 wrong passwords", because the robot also asks the
@@ -45,6 +45,13 @@ The robot warns the person first. On `/telegram/alert` the node plays
 the countdown) before it takes the photo, so the card arrives after that. There's
 no signal when a clip ends, so set `photo_delay` from the real clip length. If
 the robot leaves `WAIT_OPERATOR` during the wait, no card is sent.
+
+**Retake** plays the countdown again, waits `retake_delay`, and replaces the
+photo on the same card. A card sent as text moves to a new photo message. The
+operator's timeout keeps running, a second press during a countdown gets
+"Retake already running", and Allow or Deny still work at once. If the new
+photo fails, the old one stays with "(retake failed)". Only the Allow / Deny
+card has this button: in `BLOCKING` the `alert` clip would cut the countdown off.
 
 After a press, the buttons disappear, the message shows "✅ Allowed by
 @name" (or Denied / Resumed), and the decision is published at once.
