@@ -306,7 +306,8 @@ def main():
     ap.add_argument("--threshold", type=float, default=4000.0,
                     help="password_node's energy_threshold (Logic 1)")
     ap.add_argument("--model", default="/root/share/vosk-model-small-en-us-0.15")
-    ap.add_argument("--words", default="hello", help="extra grammar words (vosk_words)")
+    ap.add_argument("--words", default="", help="extra grammar words (vosk_words); digits only by default")
+    ap.add_argument("--match", default="first", help="match_mode, as in password.yaml")
     ap.add_argument("--env-file", default=os.path.join(ROOT, ".env"))
     ap.add_argument("--no-telegram", action="store_true")
     ap.add_argument("--digits", action="store_true",
@@ -324,7 +325,8 @@ def main():
     model = Model(args.model)
     grammar = vosk_grammar(args.words)
     stored = os.environ.get("ROBOT_PASSWORD_HASH", "")
-    verifier = PasswordVerifier(*parse_stored(stored)) if stored and not args.digits else None
+    verifier = (PasswordVerifier(*parse_stored(stored), match_mode=args.match)
+                if stored and not args.digits else None)
     settings = None if args.no_telegram else load_settings(env_file=args.env_file)
 
     original_gain = get_gain(args.card)
