@@ -8,8 +8,9 @@ it in the robot's ~/.bashrc or in the gitignored .env file, never in
 config/password.yaml.
 
 The password is normalized first (see normalize.py), so "four seven one
-nine", "4 7 1 9" and "4719" all give the same hash. It must be digits
-(contract D23), because the Vosk engine only knows the digit words.
+nine", "4 7 1 9" and "4719" all give the same hash. Digits, or a word
+(D23): for a word, also set the password node's ``vosk_words`` to it on the
+robot, because Vosk only hears the words it is given.
 """
 
 import argparse
@@ -21,13 +22,12 @@ from .verifier import make_stored
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("password", nargs="+", help="the spoken digits")
+    parser.add_argument("password", nargs="+", help="the spoken digits or word")
     args = parser.parse_args(argv)
 
     normalized = normalize(" ".join(args.password))
-    if not normalized.isdigit():
-        parser.error("password must be digits (contract D23; Vosk only knows "
-                     "digit words)")
+    if not normalized:
+        parser.error("password must have letters or digits")
 
     print("export ROBOT_PASSWORD_HASH=%s" % make_stored(normalized))
 

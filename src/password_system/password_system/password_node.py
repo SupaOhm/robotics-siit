@@ -7,8 +7,9 @@ Follows docs/interfaces.md (contract v0.3, D9, D23, D24, D27):
                                     ("" = nobody spoke)
   pub  /password/result     String  "granted" | "denied" | "cancelled", once per session
   pub  /audio/play          String  password_prompt / password_wrong / password_denied
-  pub  /password/recording  String  path of a WAV of one failed answer, only
-                                    when the session is denied (D32)
+  pub  /password/recording  String  JSON {"path": WAV of one failed answer,
+                                    "heard": transcript}, only when the
+                                    session is denied (D32)
 
 The password is not in the repo: ROBOT_PASSWORD_HASH (printed by
 make_password_hash) comes from the environment unless the parameter is set.
@@ -20,6 +21,7 @@ waiting ``listen_delay`` seconds before each attempt so the robot's own
 prompt clip is not recorded.
 """
 
+import json
 import os
 import threading
 import time
@@ -45,6 +47,7 @@ class PasswordNode(Node):
         p("language", "en-US")
         p("mic_device_index", -1)  # -1 = system default microphone
         p("vosk_model_path", "")
+        p("vosk_words", "")  # extra words Vosk may hear, e.g. a word password; set on the robot only
         p("listen_delay", 2.5)
         p("listen_timeout", 6.0)
         p("phrase_time_limit", 5.0)
@@ -100,6 +103,7 @@ class PasswordNode(Node):
                 listen_timeout=float(g("listen_timeout")),
                 phrase_time_limit=float(g("phrase_time_limit")),
                 vosk_model_path=g("vosk_model_path"),
+                vosk_words=g("vosk_words"),
                 operation_timeout=float(g("operation_timeout")),
                 energy_threshold=float(g("energy_threshold")),
             )
@@ -140,11 +144,11 @@ class PasswordNode(Node):
             return
         os.makedirs(self.recording_dir, exist_ok=True)
         stamp = time.strftime("%Y%m%d-%H%M%S")
-        for i, wav in enumerate(clips, 1):
+        for i, (wav, heard) in enumerate(clips, 1):
             path = os.path.join(self.recording_dir, "%s_%d.wav" % (stamp, i))
             with open(path, "wb") as f:
                 f.write(wav)
-            self.recording_pub.publish(String(data=path))
+            self.recording_pub.publish(String(data=json.dumps({"path": path, "heard": heard})))
 
     def on_start(self, _msg) -> None:
         with self.lock:
@@ -221,7 +225,8 @@ class PasswordNode(Node):
                 if result.kind == "error":
                     self.get_logger().warning(result.error)
                 events = self.verifier.handle(result)
-                self.publish_recordings(self.recordings.handle(result.wav, events))
+                heard = result.candidates[0] if result.candidates else ""
+                self.publish_recordings(self.recordings.handle(result.wav, events, heard))
                 self.publish(events)
                 if not self.verifier.active:
                     return

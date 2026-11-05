@@ -2,7 +2,8 @@
 
 Engines:
   vosk    Offline Vosk model, light enough for a Raspberry Pi. Its vocabulary
-          is limited to the digit words, which makes digits far more reliable
+          is limited to the digit words plus any ``vosk_words`` set on the
+          robot (a word password), which makes them far more reliable
           (default, contract D24).
   google  Google Web Speech via the SpeechRecognition package. Needs internet,
           any words, many languages. Fallback only.
@@ -22,6 +23,13 @@ ENGINES = ("vosk", "google")
 DIGIT_WORDS = ["zero", "oh", "one", "two", "three", "four", "five", "six",
                "seven", "eight", "nine"]
 VOSK_GRAMMAR = json.dumps(DIGIT_WORDS + ["[unk]"])
+
+
+def vosk_grammar(extra_words: str = "") -> str:
+    """The grammar with extra words ("hello, banana") for a word password.
+    They're set on the robot, not in the repo: the password is one of them."""
+    extra = [w for w in extra_words.lower().replace(",", " ").split() if w]
+    return json.dumps(DIGIT_WORDS + extra + ["[unk]"])
 
 
 @dataclass
@@ -64,6 +72,7 @@ class SpeechListener:
         vosk_model_path: str = "",
         operation_timeout: float = 10.0,
         energy_threshold: float = 0.0,
+        vosk_words: str = "",
     ):
         if engine not in ENGINES:
             raise ValueError("engine must be one of %s" % (ENGINES,))
@@ -85,6 +94,7 @@ class SpeechListener:
         # Google only: give up on a dropped connection instead of hanging
         self.recognizer.operation_timeout = operation_timeout
 
+        self._grammar = vosk_grammar(vosk_words)
         self._vosk_model = None
         if engine == "vosk":
             # No download at startup: the venue may have no internet.
@@ -135,7 +145,7 @@ class SpeechListener:
             return google_candidates(response)
 
         from vosk import KaldiRecognizer
-        rec = KaldiRecognizer(self._vosk_model, 16000, VOSK_GRAMMAR)
+        rec = KaldiRecognizer(self._vosk_model, 16000, self._grammar)
         rec.SetMaxAlternatives(3)
         rec.AcceptWaveform(audio.get_raw_data(convert_rate=16000, convert_width=2))
         return vosk_candidates(rec.FinalResult())

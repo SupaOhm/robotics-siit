@@ -2,6 +2,7 @@
 than the photo. rclpy, cv2 and cv_bridge are faked, so this runs without ROS."""
 
 import importlib
+import json
 import sys
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -141,9 +142,10 @@ def test_recordings_go_with_the_next_alert_and_are_deleted(node, monkeypatch, tm
         path = tmp_path / ("%d.wav" % i)
         path.write_bytes(b"wav%d" % i)
         paths.append(path)
-        node.on_recording(SimpleNamespace(data=str(path)))
-    node.on_recording(SimpleNamespace(data=str(tmp_path / "gone.wav")))  # skipped
-    assert node.take_recordings() == [("voice", b"ogg:wav1"), ("voice", b"ogg:wav2")]
+        node.on_recording(SimpleNamespace(data=json.dumps({"path": str(path), "heard": "w%d" % i})))
+    node.on_recording(SimpleNamespace(data=json.dumps({"path": str(tmp_path / "gone.wav")})))
+    node.on_recording(SimpleNamespace(data="not json"))  # skipped
+    assert node.take_recordings() == [("voice", b"ogg:wav1", "w1"), ("voice", b"ogg:wav2", "w2")]
     assert not any(p.exists() for p in paths)
     assert node.take_recordings() == []  # used once
 # ----- countdown before the photo ----------------------------------------

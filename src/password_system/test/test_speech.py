@@ -1,6 +1,7 @@
 import json
 
-from password_system.speech import VOSK_GRAMMAR, google_candidates, vosk_candidates
+from password_system.speech import (VOSK_GRAMMAR, google_candidates, vosk_candidates,
+                                    vosk_grammar)
 
 
 def test_google_candidates():
@@ -65,3 +66,10 @@ def test_energy_threshold_is_fixed():
     listener = SpeechListener(engine="google", energy_threshold=450)
     assert listener.recognizer.dynamic_energy_threshold is False
     assert listener.recognizer.energy_threshold == 450
+
+
+def test_extra_words_join_the_vosk_vocabulary():
+    words = json.loads(vosk_grammar("Hello, banana"))
+    assert "hello" in words and "banana" in words and "seven" in words
+    assert words[-1] == "[unk]"
+    assert vosk_grammar("") == VOSK_GRAMMAR
