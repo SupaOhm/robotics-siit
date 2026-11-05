@@ -17,6 +17,8 @@ Usage examples:
   # "time limit per YOLO frame" question in docs/interfaces.md:
   python3 bench_vision.py --model yolo11n_ncnn_model --sizes 320x240 \
       --configs camera_only,yolo_only --seconds 20 --csv robot_ncnn.csv
+  python3 bench_vision.py --model yolo11n.pt --sizes 320x240 \
+      --configs camera_only,yolo_only --seconds 20 --csv robot_pt.csv
 
   python3 bench_vision.py                          # camera 0, 15 s per config
   python3 bench_vision.py --source 1               # another camera index
@@ -28,7 +30,13 @@ Usage examples:
 Hold one hand in front of the camera during the MediaPipe tests: with a hand in
 view, MediaPipe tracks it, which is the realistic case for gesture control.
 
-Results are printed as a table and saved to bench_results.csv.
+YOLO times wrap model.predict only (letterbox, inference, NMS), frame after frame
+once warmed up. They leave out the wait for a camera frame, cv_bridge and DDS.
+The MediaPipe settings here are not gesture_node's, so MediaPipe times are a
+rough guide; time gesture_node itself for the real number.
+
+Results are printed as a table and saved to bench_results.csv, one row as each
+config finishes.
 """
 
 import argparse
@@ -38,11 +46,17 @@ import platform
 import sys
 import time
 
+CONFIGS = ("camera_only", "mediapipe_only", "yolo_only", "both_every_frame", "both_alternate")
 TARGET_FPS_DEFAULT = 15.0
 # Proposed time limit for one YOLO frame on the robot. CLASSIFY waits 3 s for a
-# reply and retries once (docs/interfaces.md), so 1 s leaves room for waiting for
-# the next camera frame, cv_bridge and DDS.
+# reply and retries once (docs/interfaces.md). The budget is: wait for the next
+# camera frame + YOLO + cv_bridge and DDS <= 3 s. See docs/benchmark-yolo.md.
 YOLO_LIMIT_MS_DEFAULT = 1000.0
+# detector_node keeps boxes above min(person_threshold, object_threshold) = 0.25
+# (src/object_detection/config/detector.yaml), so NMS sees the same boxes.
+CONF_DEFAULT = 0.25
+# detector.yaml image_size and the NCNN export (D20).
+IMGSZ_DEFAULT = 320
 # A recommended setting must beat the target FPS by this factor, so a busy CPU
 # (driver, LiDAR, other nodes) doesn't push it under the target.
 FPS_MARGIN = 1.10
@@ -249,16 +263,17 @@ class MediaPipeHands:
 
 
 class UltralyticsYolo:
-    def __init__(self, model_path, imgsz):
+    def __init__(self, model_path, imgsz, conf):
         try:
             from ultralytics import YOLO
         except ImportError as e:
             sys.exit(f"Ultralytics not installed ({e}).\nInstall: pip install ultralytics")
         self.model = YOLO(model_path, task="detect")   # NCNN folders can't guess the task
         self.imgsz = imgsz
+        self.conf = conf
 
     def predict(self, frame):
-        self.model.predict(frame, imgsz=self.imgsz, conf=0.4, verbose=False)
+        self.model.predict(frame, imgsz=self.imgsz, conf=self.conf, verbose=False)
 
 
 # ----------------------------------------------------------------------------
@@ -339,8 +354,13 @@ def main():
     ap.add_argument("--yolo-limit-ms", type=float, default=YOLO_LIMIT_MS_DEFAULT,
                     help="time limit for one YOLO frame on the robot (docs/interfaces.md, "
                          "Still open, Lane 5); the slowest frame must stay under it")
-    ap.add_argument("--configs", default="camera_only,mediapipe_only,yolo_only,"
-                    "both_every_frame,both_alternate")
+    ap.add_argument("--configs", default=",".join(CONFIGS),
+                    help="comma-separated, from: " + ", ".join(CONFIGS))
+    ap.add_argument("--imgsz", type=int, default=IMGSZ_DEFAULT,
+                    help="YOLO input size at every resolution (default 320, as in "
+                         "detector.yaml and the NCNN export)")
+    ap.add_argument("--conf", type=float, default=CONF_DEFAULT,
+                    help="YOLO confidence threshold (default 0.25, as detector_node)")
     ap.add_argument("--hand-model", default="hand_landmarker.task",
                     help="MediaPipe hand model file (new MediaPipe only; downloaded if missing)")
     ap.add_argument("--csv", default="bench_results.csv")
@@ -348,33 +368,55 @@ def main():
     args = ap.parse_args()
 
     configs = [c.strip() for c in args.configs.split(",") if c.strip()]
+    unknown = [c for c in configs if c not in CONFIGS]
+    if unknown or not configs:
+        ap.error(f"unknown config {', '.join(unknown) or '(none given)'}; "
+                 f"choose from {', '.join(CONFIGS)}")
+    if args.every < 1:
+        ap.error("--every must be 1 or more")
     sizes = parse_sizes(args.sizes)
+    imgsz = args.imgsz
 
     print(f"Machine: {platform.node()} | {platform.machine()} | Python {platform.python_version()}")
     print(f"Source: {'FAKE' if args.fake else args.source} | Model: {'FAKE' if args.fake else args.model}")
-    print(f"{args.seconds:.0f} s per config, YOLO every {args.every} frames in both_alternate\n")
+    print(f"YOLO imgsz {imgsz}, conf {args.conf} | {args.seconds:.0f} s per config, "
+          f"YOLO every {args.every} frames in both_alternate\n")
+
+    fields = ["resolution", "config", "fps", "compute_fps", "frames", "mediapipe_ms",
+              "mediapipe_p95_ms", "yolo_ms", "yolo_p95_ms", "yolo_max_ms", "yolo_imgsz",
+              "yolo_conf", "temp_start_c", "temp_end_c"]
+    csv_file = open(args.csv, "w", newline="")
+    writer = csv.DictWriter(csv_file, fieldnames=fields)
+    writer.writeheader()
+    csv_file.flush()
 
     hands = FakeHands() if args.fake else None
     results = []
-    for (w, h) in sizes:
-        imgsz = 640 if w >= 640 else 320
-        source = FakeSource(w, h) if args.fake else CvSource(args.source, w, h)
-        if not args.fake:
-            if hands is None and any("mediapipe" in c or "both" in c for c in configs):
-                hands = MediaPipeHands(args.hand_model)
-        yolo = None
-        if any("yolo" in c or "both" in c for c in configs):
-            yolo = FakeYolo(imgsz) if args.fake else UltralyticsYolo(args.model, imgsz)
-        try:
-            for name in configs:
-                print(f"  running {name:17s} at {w}x{h} ...", flush=True)
-                r = run_config(name, source, hands, yolo, args.seconds, args.every, args.warmup)
-                r.update({"resolution": f"{w}x{h}", "yolo_imgsz": imgsz})
-                results.append(r)
-        finally:
-            source.release()
-    if hasattr(hands, "close"):
-        hands.close()
+    try:
+        for (w, h) in sizes:
+            source = FakeSource(w, h) if args.fake else CvSource(args.source, w, h)
+            if not args.fake:
+                if hands is None and any("mediapipe" in c or "both" in c for c in configs):
+                    hands = MediaPipeHands(args.hand_model)
+            yolo = None
+            if any("yolo" in c or "both" in c for c in configs):
+                yolo = FakeYolo(imgsz) if args.fake else UltralyticsYolo(args.model, imgsz, args.conf)
+            try:
+                for name in configs:
+                    print(f"  running {name:17s} at {w}x{h} ...", flush=True)
+                    r = run_config(name, source, hands, yolo, args.seconds, args.every, args.warmup)
+                    r.update({"resolution": f"{w}x{h}",
+                              "yolo_imgsz": imgsz if r["yolo_ms"] is not None else None,
+                              "yolo_conf": args.conf if r["yolo_ms"] is not None else None})
+                    results.append(r)
+                    writer.writerow({k: r.get(k) for k in fields})   # saved even if a later config fails
+                    csv_file.flush()
+            finally:
+                source.release()
+    finally:
+        csv_file.close()
+        if hasattr(hands, "close"):
+            hands.close()
 
     # Table
     print("\nFPS = real end-to-end FPS. Compute FPS = processing only (camera not counted).")
@@ -394,15 +436,6 @@ def main():
         print(row.format(r["resolution"], r["config"], fmt(r["fps"]), fmt(r["compute_fps"]),
                          fmt(r["mediapipe_ms"]), yolo, temp))
 
-    # CSV
-    fields = ["resolution", "config", "fps", "compute_fps", "frames", "mediapipe_ms",
-              "mediapipe_p95_ms", "yolo_ms", "yolo_p95_ms", "yolo_max_ms", "yolo_imgsz",
-              "temp_start_c", "temp_end_c"]
-    with open(args.csv, "w", newline="") as f:
-        wr = csv.DictWriter(f, fieldnames=fields)
-        wr.writeheader()
-        for r in results:
-            wr.writerow({k: r.get(k) for k in fields})
     print(f"\nSaved {os.path.abspath(args.csv)}")
 
     # Recommendation
