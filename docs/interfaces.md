@@ -164,7 +164,7 @@ topic is never used on the robot.
 | `found_obstacle` | "Found an obstacle" | state_machine (`ANNOUNCE`, avoidance failed) |
 | `password_prompt` | "Say the password" | password_node |
 | `password_wrong` | "Wrong, try again" | password_node |
-| `password_countdown` | "Three, two, one", beep (3.2 s) | password_node, after each prompt; the mic opens when it ends (D33) |
+| `password_countdown` | "Three, two, one" (3.0 s) | password_node, after each prompt; the mic opens when it ends (D33) |
 | `password_denied` | "Access denied, calling the operator" | password_node (after 3 wrong, or 3 mic or speech engine failures in a row) |
 | `photo_countdown` | "Please step back and look at the camera. Photo in 3, 2, 1" | telegram_node (on `/telegram/alert` and **Retake**) |
 | `password_correct` | "Password correct, you may pass" | state_machine (`PASS` after `granted`) |

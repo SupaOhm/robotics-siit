@@ -56,7 +56,7 @@ class Event:
     attempts_left: int
 
 
-# "Three, two, one" and a beep after every prompt; the mic opens when it
+# "Three, two, one" after every prompt; the mic opens when it
 # ends (/audio/done), so the robot's own voice is never recorded (D33)
 COUNTDOWN_CLIP = "password_countdown"
 

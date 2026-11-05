@@ -36,7 +36,7 @@ When a clip finishes (not when interrupted), the node publishes its id on
 - found_obstacle
 - password_prompt
 - password_wrong
-- password_countdown ("three, two, one", beep: password_node opens the mic when it ends)
+- password_countdown ("three, two, one": password_node opens the mic when it ends)
 - password_denied
 - photo_countdown
 - password_correct

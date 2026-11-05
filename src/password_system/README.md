@@ -48,12 +48,12 @@ must be (`energy_threshold`), so keep quiet near the robot when it starts.
 The threshold then stays fixed: an adaptive one also rose while the
 person was talking and cut off a softer last digit.
 
-After each prompt the robot counts down ("three, two, one", beep), and the
+After each prompt the robot counts down ("three, two, one"), and the
 mic opens the moment `audio_node` reports that clip done on `/audio/done`,
-so it never records the robot's own voice (D33). Speak right after the
-beep. If no report comes in `countdown_timeout` (10 s), it listens anyway;
+so it never records the robot's own voice (D33). Speak right after "one".
+If no report comes in `countdown_timeout` (10 s), it listens anyway;
 after an engine failure (no new prompt) it waits `listen_delay` (2.5 s).
-Worst case is 3 attempts of about 18 s each (prompt, 3.2 s countdown, 6 s
+Worst case is 3 attempts of about 18 s each (prompt, 3 s countdown, 6 s
 silence or a 5 s answer, transcription), which still fits the state
 machine's 60 s `CHECKPOINT` timeout.
 
