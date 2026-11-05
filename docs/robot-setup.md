@@ -21,7 +21,10 @@ the blanks as you go. Other lanes read the results from here.
       phone allows it)
 - [ ] Laptop joins the hotspot
 
-Every machine, in `~/.bashrc`:
+Every machine, in `~/.bashrc`. On a Linux laptop, `bash tools/ros_env_setup.sh`
+writes these lines and installs CycloneDDS; `bash tools/ros_env_setup.sh check`
+prints the line to post on the session issue. On a Mac, `tools/mac_ros_setup.sh`
+sets them in the `ros_env` conda environment.
 
 ```bash
 source /opt/ros/humble/setup.bash
