@@ -27,7 +27,7 @@ people with a password.
 
 | Part | Choice |
 |---|---|
-| Robot | Yahboom RosmasterPi A1 with mecanum wheels, so it turns in place. ROS 2 (`ament_python`, colcon) |
+| Robot | Yahboom ROSMASTER M1 with mecanum wheels, so it turns in place. ROS 2 (`ament_python`, colcon) |
 | Gesture control | OpenCV + MediaPipe (existing code), runs on the operator's laptop and sends drive commands to the robot over ROS |
 | Object detection | Pretrained YOLO nano (COCO, NCNN export) on the robot's onboard pan-tilt camera, plus a spoken name table (class to English phrase) (D18, D20, D21) |
 | Distance sensing | See [D19](docs/decisions.md) (LiDAR if fitted, else front ultrasonic) |

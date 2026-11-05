@@ -1,6 +1,6 @@
 # Robot setup (Lane 1)
 
-Bring-up checklist for the Yahboom RosmasterPi A1. It confirms the hardware
+Bring-up checklist for the Yahboom ROSMASTER M1. It confirms the hardware
 and software decisions in [decisions.md](decisions.md) (D16–D22). Fill in
 the blanks as you go. Other lanes read the results from here.
 

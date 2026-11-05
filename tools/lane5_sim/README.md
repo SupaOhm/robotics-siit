@@ -10,7 +10,7 @@ CoppeliaSim SickS300 -> scan_bridge.py -> /scan -> Lane 3 avoidance_node -> /avo
 
 The QA relay is temporary and must not replace the Lane 1 state machine in the integrated robot.
 
-This is a simulation of a KUKA youBot, not the physical Yahboom RosmasterPi A1.
+This is a simulation of a KUKA youBot, not the physical Yahboom ROSMASTER M1.
 
 ## 2. Requirements
 
