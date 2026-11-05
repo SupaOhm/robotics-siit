@@ -58,7 +58,7 @@ class PasswordNode(Node):
         p("listen_timeout", 6.0)
         p("phrase_time_limit", 5.0)
         p("operation_timeout", 10.0)
-        p("energy_threshold", 0.0)  # mic loudness that counts as speech; 0 = calibrate at startup
+        p("energy_threshold", 0.0)  # google: mic loudness that counts as speech; 0 = calibrate at startup
         p("sim_timeout", 8.5)  # sim: no typed attempt this long -> silence; 0 = off
         p("recording_dir", "/tmp/password_attempts")  # failed answers for Telegram (D32)
 
@@ -120,10 +120,13 @@ class PasswordNode(Node):
                 energy_threshold=float(g("energy_threshold")),
             )
             try:
-                if float(g("energy_threshold")) <= 0:
-                    self.listener.calibrate()  # stay quiet for 1 s at start-up
-                self.get_logger().info("speech energy threshold %.0f"
-                                       % self.listener.recognizer.energy_threshold)
+                if g("engine") == "vosk":
+                    self.listener.open_mic()  # stays open: no threshold to measure (D34)
+                else:
+                    if float(g("energy_threshold")) <= 0:
+                        self.listener.calibrate()  # stay quiet for 1 s at start-up
+                    self.get_logger().info("speech energy threshold %.0f"
+                                           % self.listener.recognizer.energy_threshold)
             except Exception as e:
                 # Keep running: each attempt reports a service error, and 3 in a
                 # row end as "denied", so the operator still gets the alert.
@@ -249,7 +252,7 @@ class PasswordNode(Node):
                     return
 
             try:
-                result = self.listener.listen_once()
+                result = self.listener.listen_once(cancel)
             except Exception as e:  # never let the session die silently
                 from .speech import ListenResult
                 result = ListenResult("error", error="listen failed: %r" % e)
@@ -270,6 +273,8 @@ class PasswordNode(Node):
 
     def destroy_node(self):
         self._cancel.set()
+        if self.listener is not None:
+            self.listener.close_mic()
         super().destroy_node()
 
 

@@ -43,10 +43,17 @@ mic mode and sent to the operator only if the session ends `denied`
 | Spoke, but no digit was recognized | Yes |
 | Microphone or speech engine failed (unplugged, busy, engine error) | No. But 3 in a row end the session as `denied`, so the operator decides |
 
-At start-up the node listens to the room for 1 s to set how loud speech
-must be (`energy_threshold`), so keep quiet near the robot when it starts.
-The threshold then stays fixed: an adaptive one also rose while the
-person was talking and cut off a softer last digit.
+With Vosk there is no loudness threshold (D34). The node opens the mic at
+start-up and keeps it open, so stop `password_node` before running
+`tools/mic_check.py` or `tools/listen_check.py`. Each try feeds the mic to
+Vosk from the moment the beep ends, and the first phrase with a digit is the
+answer. Nothing heard in `listen_timeout` is silence. If the mic delivers
+no audio for 2 s, that try is a mic failure and the next one opens it again.
+
+With `engine:=google`, the node instead listens to the room for 1 s at
+start-up to set how loud speech must be (`energy_threshold`), so keep quiet
+near the robot when it starts. The threshold then stays fixed: an adaptive
+one also rose while the person was talking and cut off a softer last digit.
 
 After each prompt the robot counts down ("three, two, one") and beeps,
 and the mic opens the moment `audio_node` reports the beep done on
@@ -179,13 +186,13 @@ clips and results each step publishes, and Vosk / Google result parsing.
 |---|---|---|
 | `listen_delay` | 2.5 s | The robot records its own prompt (raise it) |
 | `listen_timeout` | 6 s | People need longer before they start talking |
-| `phrase_time_limit` | 5 s | Answers get cut off |
+| `phrase_time_limit` | 5 s | Answers get cut off. With Vosk, `listen_timeout` plus this is the whole listening window (11 s). With Google, it's the longest one answer can be |
 | `match_mode` | `first` | `first`: the first N digits heard (N = password length), so a repeat still passes. `exact`: the whole answer must be the password. Never `contains`: it lets one attempt test many codes |
 | `max_service_errors` | 3 | Mic or engine failures before handing over to the operator |
 | `mic_device_index` | -1 | The wrong microphone is used |
 | `mic_sample_rate` | 48000 | The recording sounds sped up and high-pitched (wrong rate). 0 = the device's default |
 | `sim_timeout` | 8.5 s | Sim only: time to type an attempt before it counts as silence |
-| `energy_threshold` | 0 (measure at start-up) | Digits get cut off or silence is taken as speech. The node logs the value it measured; set a fixed one if the room's noise changes after start-up |
+| `energy_threshold` | 0 (measure at start-up) | `engine: google` only. Digits get cut off or silence is taken as speech. The node logs the value it measured; set a fixed one if the room's noise changes after start-up |
 
 ## Files
 
