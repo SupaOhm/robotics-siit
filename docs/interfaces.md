@@ -26,6 +26,7 @@ robot.
 |---|---|---|---|
 | `gesture_node` | `gesture_control` | 2 | Operator laptop |
 | `state_machine` | `robot_core` | 1 | Robot |
+| `camera_tilt` | `robot_core` | 1 | Robot |
 | Yahboom base and camera drivers | vendor | 1 | Robot |
 | `avoidance_node` | `obstacle_avoidance` | 3 | Robot |
 | `detector_node` | `object_detection` | 2 | Robot (laptop if too slow, D18) |
@@ -190,6 +191,11 @@ topic is never used on the robot.
 | Topic | Type | From → To | Meaning |
 |---|---|---|---|
 | `/robot/state` | `std_msgs/String` | state_machine → anyone | Current state, on every change and at 1 Hz (debugging, sim, demo overlay) |
+| `/camera/tilt` | `std_msgs/Int32` | state_machine → camera_tilt | Camera tilt in Yahboom servo units (0–110, higher is up). `tilt_up` (90) in `CHECKPOINT`, `WAIT_OPERATOR` and `BLOCKING`, so the Telegram photo shows the face; `tilt_level` (30) otherwise (D31) |
+
+`camera_tilt` (`robot_core`) is the only node that imports a Yahboom
+message: it turns `/camera/tilt` into `/Servo`
+(`yahboomcar_msgs/ServoControl`, `s1` pan, `s2` tilt).
 
 ## State machine
 

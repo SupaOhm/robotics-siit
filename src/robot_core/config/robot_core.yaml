@@ -19,3 +19,9 @@ state_machine:
     blocking_repeat: 3.0      # alert + blocking clips in BLOCKING
     back_hold: 1.0            # `back` held -> override (D11)
     avoid_timeout: 10.0       # no /avoidance/result -> cancel, failed (D30)
+    tilt_level: 30.0          # camera tilt (Yahboom s2, 0-110) for driving and the detector (D31)
+    tilt_up: 90.0             # camera tilt in CHECKPOINT / WAIT_OPERATOR / BLOCKING, for the face (D31)
+
+camera_tilt:
+  ros__parameters:
+    pan: 90                   # Yahboom s1, camera facing forward

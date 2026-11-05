@@ -34,6 +34,7 @@ bring-up checklist is in [robot-setup.md](robot-setup.md).
 | D28 | What starts `CLASSIFY` | Only an obstacle **appearing** (`/obstacle/detected` false → true). `forward` stays blocked while it's true | Any `true` (re-triggers forever after `failed` / `back`) | 1, 3 |
 | D29 | Person walks away during the password | Path clear for 5 s in `CHECKPOINT` → `/password/cancel`, back to `DRIVE` | Wait for the operator | 1, 4 |
 | D30 | Stuck states | `CHECKPOINT` with no result in 60 s → `/password/cancel`, `WAIT_OPERATOR`; `AVOID` with no result in 10 s → `/avoidance/cancel`, `failed` | No timeouts | 1 |
+| D31 | Camera sees only legs at the checkpoint | Tilt the camera up (`/camera/tilt`) on entering `CHECKPOINT`, keep it up through `WAIT_OPERATOR` and `BLOCKING`, level again on `DRIVE`, `PASS` or `AVOID`. A `camera_tilt` bridge sends the Yahboom `/Servo`. No wait before the photo: the password takes over 10 s, the servo about 0.5 s | Tilt only for the photo; state machine publishes `/Servo` itself (custom message) | 1, 4 |
 | D32 | Operator can't hear what the person said | `password_node` keeps the failed answers in memory. Only if the session ends `denied` it saves them as WAVs and publishes each path on `/password/recording`; `telegram_node` sends them as voice replies to the next alert's card, then deletes the files. Silence has no recording. A `granted` session drops everything | Send each answer as it fails; send audio bytes over ROS; also keep correct answers (they contain the password) | 4 |
 
 ## C. Hardware, models and software

@@ -8,11 +8,18 @@ publishes `/cmd_vel` (D2). It follows the state machine in
 The logic is plain Python in `robot_core/machine.py`, so the tests run
 anywhere without ROS. `state_machine_node.py` only converts messages.
 
+`camera_tilt`: tilts the camera up while a person is at the checkpoint, so
+the Telegram photo shows a face, not legs (D31). It turns `/camera/tilt`
+into the Yahboom `/Servo` message, so it needs the Yahboom workspace
+sourced (`yahboomcar_msgs`). The angles are `tilt_level` and `tilt_up` in
+`config/robot_core.yaml`.
+
 ## Run
 
 ```bash
 colcon build --packages-select robot_core
 source install/setup.bash
+source ~/yahboomcar_ros2_ws/yahboomcar_ws/install/setup.bash  # robot: yahboomcar_msgs for camera_tilt
 ros2 launch robot_core robot_core.launch.py
 ros2 topic echo /robot/state
 ```
