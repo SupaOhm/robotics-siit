@@ -4,7 +4,7 @@ Decides which Telegram messages ("cards") to send, which to close, and what a
 button press means. ``bot.py`` does the actual Telegram calls.
 
 Contract (docs/interfaces.md v0.3, D11, D14, D15, D30):
-- /telegram/alert <id>     -> card with a photo and Allow / Deny buttons
+- /telegram/alert <id>     -> card with a photo and Allow / Deny / Retake buttons
 - /telegram/blocking <id>  -> card "Robot is blocking" with a Resume button.
   It also closes any Allow / Deny card nobody answered: the 30 s timeout
   lives in the state machine, which treats it as Deny.
@@ -12,6 +12,10 @@ Contract (docs/interfaces.md v0.3, D11, D14, D15, D30):
   on /telegram/decision, and the card's buttons are removed.
 - /robot/state leaving WAIT_OPERATOR or BLOCKING (e.g. the operator held
   `back`) closes the cards that state was waiting on.
+
+Retake isn't a decision: nothing reaches the state machine, the timeout keeps
+running and the card stays open. Only the Allow / Deny card has it, because
+in BLOCKING the repeating `alert` clip would cut the countdown off.
 
 Every card's buttons carry a token that is unique to this run, so a button
 on an old card can never act on a newer alert, even if alert ids repeat
@@ -23,10 +27,11 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Iterable, List, Optional, Tuple
 
-ALLOW, DENY, RESUME = "allow", "deny", "resume"
+ALLOW, DENY, RESUME, RETAKE = "allow", "deny", "resume", "retake"
 ALERT, BLOCKING = "alert", "blocking"
-DECISIONS_FOR_KIND = {ALERT: (ALLOW, DENY), BLOCKING: (RESUME,)}
-BUTTON_LABELS = {ALLOW: "✅ Allow", DENY: "⛔ Deny", RESUME: "▶️ Resume"}
+BUTTONS_FOR_KIND = {ALERT: (ALLOW, DENY, RETAKE), BLOCKING: (RESUME,)}
+BUTTON_LABELS = {ALLOW: "✅ Allow", DENY: "⛔ Deny", RESUME: "▶️ Resume",
+                 RETAKE: "📷 Retake"}
 RESULT_LINES = {ALLOW: "✅ Allowed by %s", DENY: "⛔ Denied by %s",
                 RESUME: "▶️ Resumed by %s"}
 
@@ -36,6 +41,8 @@ STATE_FOR_KIND = {ALERT: "WAIT_OPERATOR", BLOCKING: "BLOCKING"}
 EXPIRED_LINE = "⌛ No answer in %d s: treated as Deny"
 SUPERSEDED_LINE = "Closed: a newer alert replaced this one"
 MOVED_ON_LINE = "Closed: the robot moved on (now %s)"
+RETAKE_TOAST = "Taking a new photo: the robot is counting down"
+RETAKE_BUSY_TOAST = "Retake already running"
 
 MAX_CALLBACK_BYTES = 64  # Telegram limit for callback_data
 MAX_CARDS = 50
@@ -83,6 +90,11 @@ class Card:
     with_photo: bool = False
     message_id: Optional[int] = None
     open: bool = True
+    retaking: bool = False
+    base_text: str = ""             # text without notes about the photo
+
+    def __post_init__(self):
+        self.base_text = self.text
 
 
 @dataclass
@@ -97,6 +109,7 @@ class PressResult:
     toast: str                      # short pop-up shown to whoever pressed
     decision: Optional[dict] = None  # publish this on /telegram/decision
     close: Optional[Close] = None
+    retake: Optional[Card] = None   # take a new photo for this card
 
 
 @dataclass
@@ -114,7 +127,7 @@ class AlertBook:
         self._serial += 1
         token = "%s%d" % (self._run, self._serial)
         buttons = [(BUTTON_LABELS[d], callback_data(d, alert_id, token))
-                   for d in DECISIONS_FOR_KIND[kind]]
+                   for d in BUTTONS_FOR_KIND[kind]]
         card = Card(alert_id, kind, token, text, buttons)
         self.cards[token] = card
         while len(self.cards) > MAX_CARDS:
@@ -172,8 +185,13 @@ class AlertBook:
         card = self.cards.get(token)
         if card is None or not card.open or card.alert_id != alert_id:
             return PressResult("This alert is no longer active")
-        if decision not in DECISIONS_FOR_KIND[card.kind]:
+        if decision not in BUTTONS_FOR_KIND[card.kind]:
             return PressResult("Unknown button")
+        if decision == RETAKE:
+            if card.retaking:
+                return PressResult(RETAKE_BUSY_TOAST)
+            card.retaking = True
+            return PressResult(RETAKE_TOAST, retake=card)
         card.open = False
         line = RESULT_LINES[decision] % user_name
         return PressResult(

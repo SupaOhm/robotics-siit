@@ -25,10 +25,15 @@ class AudioNode(Node):
             / "clips"
         )
 
+        # /audio/done: a clip finished playing, e.g. password_node's
+        # countdown, so it opens the mic right after it (D33)
+        self.done_pub = self.create_publisher(String, "/audio/done", 10)
+
         self.player = AudioPlayer(
             cooldown=float(self.get_parameter("cooldown_seconds").value),
             clip_dir=clip_dir,
             logger=self.get_logger(),
+            on_done=lambda clip_id: self.done_pub.publish(String(data=clip_id)),
         )
 
         self.subscription = self.create_subscription(

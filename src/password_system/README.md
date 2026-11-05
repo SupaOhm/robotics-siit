@@ -1,8 +1,8 @@
 # password_system (Lane 4, spoken password)
 
 `password_node`: when the robot finds a person, it asks for the password.
-The person **says the digits** into the robot's USB microphone. The node
-recognizes them **offline with Vosk**, using a vocabulary of digit words
+The person **says the password** (digits or a word) into the robot's USB microphone. The node
+recognizes it **offline with Vosk**; `vosk_free_speech` hears any English, otherwise a vocabulary of digit words
 only, and checks them. The person gets **3 attempts**. After 3 failures the
 node reports `denied`, and the state machine starts the alert and Telegram
 flow.
@@ -19,6 +19,7 @@ run anywhere without ROS or a microphone.
 | `/password/cancel` | `std_msgs/Empty` | in | Abort: the operator took over, or the person left |
 | `/password/result` | `std_msgs/String` | out | One per session: `granted`, `denied` or `cancelled` |
 | `/audio/play` | `std_msgs/String` | out | The node's own prompts (see below) |
+| `/password/recording` | `std_msgs/String` (JSON) | out | `{"path", "heard"}`: a WAV of one failed answer and its transcript, only when the session is `denied` (D32). Saved in `recording_dir` (`/tmp/password_attempts`) |
 | `/password/sim_input` | `std_msgs/String` | in | One typed attempt, `input_mode: sim` only (D27). `""` = nobody spoke |
 
 | When | Clip on `/audio/play` |
@@ -28,7 +29,9 @@ run anywhere without ROS or a microphone.
 | Third failure | `password_denied`: "Access denied, calling the operator" (instead of `password_wrong`) |
 | `granted` | None. The state machine plays `password_correct` in `PASS` |
 
-What the person says is never published or logged.
+What the person says is never logged. Failed answers are recorded in
+mic mode and sent to the operator only if the session ends `denied`
+(D32); a correct answer is never saved. Sim mode has no audio.
 
 ## What counts as an attempt
 
@@ -40,15 +43,27 @@ What the person says is never published or logged.
 | Spoke, but no digit was recognized | Yes |
 | Microphone or speech engine failed (unplugged, busy, engine error) | No. But 3 in a row end the session as `denied`, so the operator decides |
 
-At start-up the node listens to the room for 1 s to set how loud speech
-must be (`energy_threshold`), so keep quiet near the robot when it starts.
-The threshold then stays fixed: an adaptive one also rose while the
-person was talking and cut off a softer last digit.
+With Vosk there is no loudness threshold (D34). The node opens the mic at
+start-up and keeps it open, so stop `password_node` before running
+`tools/mic_check.py` or `tools/listen_check.py`. Each try feeds the mic to
+Vosk from the moment the beep ends, and the first phrase with a digit is the
+answer. Nothing heard in `listen_timeout` is silence. If the mic delivers
+no audio for 2 s, that try is a mic failure and the next one opens it again.
 
-Before each attempt the node waits `listen_delay` (2.5 s), so it doesn't
-record its own prompt clip. The prompt clips must be shorter than that.
-Worst case is 3 attempts of about 14 s each, which fits the state machine's
-60 s `CHECKPOINT` timeout.
+With `engine:=google`, the node instead listens to the room for 1 s at
+start-up to set how loud speech must be (`energy_threshold`), so keep quiet
+near the robot when it starts. The threshold then stays fixed: an adaptive
+one also rose while the person was talking and cut off a softer last digit.
+
+After each prompt the robot counts down ("three, two, one") and beeps,
+and the mic opens the moment `audio_node` reports the beep done on
+`/audio/done`, so it never records the robot's own voice (D33). Speak
+right after the beep.
+If no report comes in `countdown_timeout` (10 s), it listens anyway;
+after an engine failure (no new prompt) it waits `listen_delay` (2.5 s).
+Worst case is 3 attempts of about 18 s each (prompt, 3 s countdown, 6 s
+silence or a 5 s answer, transcription), which still fits the state
+machine's 60 s `CHECKPOINT` timeout.
 
 In sim mode, no typed attempt within `sim_timeout` (8.5 s) counts as
 silence, so sim timing matches the robot. If `/password/start` arrives
@@ -132,6 +147,13 @@ in [config/password.yaml](config/password.yaml):
 python3 -c "import speech_recognition as sr; print(list(enumerate(sr.Microphone.list_microphone_names())))"
 ```
 
+**Check the mic's sample rate.** The robot's USB mic (C-Media) offers
+44100 and 48000 Hz, but at 44100 it really delivers only about 24,300
+samples a second. Speech is then stored 1.8x fast and high-pitched, and
+Vosk hears "oh" or "how how" for "hello". `mic_sample_rate: 48000` fixes
+it. For a new mic, `tools/mic_check.py` sends test recordings to Telegram
+so you can hear them.
+
 **Fallback engine:** `engine:=google` uses Google Web Speech instead. It
 needs the hotspot's internet, and it's unofficial and can fail. Only use it
 if Vosk does badly in the venue.
@@ -164,12 +186,13 @@ clips and results each step publishes, and Vosk / Google result parsing.
 |---|---|---|
 | `listen_delay` | 2.5 s | The robot records its own prompt (raise it) |
 | `listen_timeout` | 6 s | People need longer before they start talking |
-| `phrase_time_limit` | 5 s | Answers get cut off |
-| `match_mode` | `exact` | Keep `exact`. `contains` lets one attempt test many codes |
+| `phrase_time_limit` | 5 s | Answers get cut off. With Vosk, `listen_timeout` plus this is the whole listening window (11 s). With Google, it's the longest one answer can be |
+| `match_mode` | `first` | `first`: the first N digits heard (N = password length), so a repeat still passes. `exact`: the whole answer must be the password. Never `contains`: it lets one attempt test many codes |
 | `max_service_errors` | 3 | Mic or engine failures before handing over to the operator |
 | `mic_device_index` | -1 | The wrong microphone is used |
+| `mic_sample_rate` | 48000 | The recording sounds sped up and high-pitched (wrong rate). 0 = the device's default |
 | `sim_timeout` | 8.5 s | Sim only: time to type an attempt before it counts as silence |
-| `energy_threshold` | 0 (measure at start-up) | Digits get cut off or silence is taken as speech. The node logs the value it measured; set a fixed one if the room's noise changes after start-up |
+| `energy_threshold` | 0 (measure at start-up) | `engine: google` only. Digits get cut off or silence is taken as speech. The node logs the value it measured; set a fixed one if the room's noise changes after start-up |
 
 ## Files
 

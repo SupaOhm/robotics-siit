@@ -26,6 +26,7 @@ robot.
 |---|---|---|---|
 | `gesture_node` | `gesture_control` | 2 | Operator laptop |
 | `state_machine` | `robot_core` | 1 | Robot |
+| `camera_tilt` | `robot_core` | 1 | Robot |
 | Yahboom base and camera drivers | vendor | 1 | Robot |
 | `avoidance_node` | `obstacle_avoidance` | 3 | Robot |
 | `detector_node` | `object_detection` | 2 | Robot (laptop if too slow, D18) |
@@ -127,12 +128,15 @@ and the direction from ±90° to the sides; ultrasonic sees the front only.
 | `/password/start` | `std_msgs/Empty` | state_machine → password_node | Person found: start a session (3 attempts) |
 | `/password/cancel` | `std_msgs/Empty` | state_machine → password_node | Abort: the operator took over, or the person walked away |
 | `/password/result` | `std_msgs/String` | password_node → state_machine | One per session: `granted`, `denied` (3 wrong, or 3 mic or speech engine failures in a row) or `cancelled` |
+| `/password/recording` | `std_msgs/String` (JSON) | password_node → telegram_node | `{"path": "/tmp/password_attempts/…wav", "heard": "six seven six six"}`: one failed answer and what the speech engine heard (`""` = no digits). Only for a `denied` session, published before the result (D32) |
 
 - The password node plays its own prompts through `/audio/play`
   (`password_prompt`, `password_wrong`, `password_denied`).
-- Default engine: Vosk offline, vocabulary limited to the digits (D24).
-- What the person says is never published or logged, and the password
-  itself is kept out of the repo.
+- Default engine: Vosk offline. `vosk_free_speech` (on in `password.yaml`) hears any English, so a word password needs no word list and `/password/recording` carries what was really said. Off, the vocabulary is the digits plus `vosk_words` (D24).
+- What the person says is never logged, and the password itself is kept
+  out of the repo. Failed answers are recorded only for a `denied`
+  session, for the operator (D32). A correct answer is never saved, since
+  it contains the password.
 
 **Simulation input (D27):** CoppeliaSim has no microphone. In sim mode the
 password node reads typed attempts from `/password/sim_input`
@@ -144,6 +148,7 @@ topic is never used on the robot.
 | Topic | Type | From → To | Meaning |
 |---|---|---|---|
 | `/audio/play` | `std_msgs/String` | anyone → audio_node | Clip id, e.g. `found_chair` |
+| `/audio/done` | `std_msgs/String` | audio_node → anyone | Clip id, when a clip has finished playing (not when interrupted). password_node opens the mic on `password_beep` (D33) |
 
 - Requests that arrive while a clip plays are **queued**, not dropped.
   `alert` interrupts and plays at once.
@@ -159,7 +164,10 @@ topic is never used on the robot.
 | `found_obstacle` | "Found an obstacle" | state_machine (`ANNOUNCE`, avoidance failed) |
 | `password_prompt` | "Say the password" | password_node |
 | `password_wrong` | "Wrong, try again" | password_node |
+| `password_countdown` | "Three, two, one" (2.4 s) | password_node, after each prompt (D33) |
+| `password_beep` | Beep (0.15 s): speak now | password_node, after the countdown; the mic opens as it ends (D33) |
 | `password_denied` | "Access denied, calling the operator" | password_node (after 3 wrong, or 3 mic or speech engine failures in a row) |
+| `photo_countdown` | "Please step back and look at the camera. Photo in 3, 2, 1" | telegram_node (on `/telegram/alert` and **Retake**) |
 | `password_correct` | "Password correct, you may pass" | state_machine (`PASS` after `granted`) |
 | `operator_allowed` | "The operator has allowed you to pass" | state_machine (`PASS` after `allow`) |
 | `alert` | Alert sound | state_machine (`BLOCKING`) |
@@ -169,12 +177,16 @@ topic is never used on the robot.
 
 | Topic | Type | From → To | Meaning |
 |---|---|---|---|
-| `/telegram/alert` | `std_msgs/String` | state_machine → telegram_node | Alert id. Send a photo from `/camera/image_raw` with **Allow** / **Deny** buttons |
+| `/telegram/alert` | `std_msgs/String` | state_machine → telegram_node | Alert id. Play `photo_countdown`, wait `photo_delay`, then send a photo from `/camera/image_raw` with **Allow** / **Deny** / **Retake** buttons. No card if the robot left `WAIT_OPERATOR` during the wait. **Retake** repeats the countdown and replaces the photo; it sends nothing to the state machine and doesn't restart the timeout |
 | `/telegram/blocking` | `std_msgs/String` | state_machine → telegram_node | A **new** alert id. Deny or timeout happened: send "Robot is blocking" with a **Resume** button |
 | `/telegram/decision` | `std_msgs/String` (JSON) | telegram_node → state_machine | `{"id": "a3", "decision": "allow"}`; `decision` is `allow`, `deny` or `resume` |
 
+- The next alert after `/password/recording` messages arrive sends them as
+  voice messages replying to the photo card, captioned with what was heard,
+  then deletes the files (D32).
+
 - The state machine ignores a decision whose `id` isn't the current alert.
-- The 30 s timeout is in the state machine (D15), so the Telegram node
+- The 40 s timeout is in the state machine (D15), so the Telegram node
   learns of it from `/telegram/blocking`. On that message it removes the
   old **Allow** / **Deny** buttons and replies "expired" if nobody pressed
   them. On `allow`, `deny` or `resume` it removes the buttons it just used.
@@ -184,6 +196,11 @@ topic is never used on the robot.
 | Topic | Type | From → To | Meaning |
 |---|---|---|---|
 | `/robot/state` | `std_msgs/String` | state_machine → anyone | Current state, on every change and at 1 Hz (debugging, sim, demo overlay) |
+| `/camera/tilt` | `std_msgs/Int32` (latched: transient-local QoS) | state_machine → camera_tilt | Camera tilt in Yahboom servo units (0–110, higher is up). `tilt_up` (90) in `CHECKPOINT`, `WAIT_OPERATOR` and `BLOCKING`, so the Telegram photo shows the face; `tilt_level` (30) otherwise (D31) |
+
+`camera_tilt` (`robot_core`) is the only node that imports a Yahboom
+message: it turns `/camera/tilt` into `/Servo`
+(`yahboomcar_msgs/ServoControl`, `s1` pan, `s2` tilt).
 
 ## State machine
 
@@ -200,7 +217,7 @@ DRIVE ─obstacle appears─► CLASSIFY ─object / unknown─► ANNOUNCE ─�
                           ▼
                     WAIT_OPERATOR ─allow─► PASS
                           │
-                 deny / 30 s timeout
+                 deny / 40 s timeout
                           ▼
                       BLOCKING ─resume / hold back─► AVOID
 ```
@@ -212,7 +229,7 @@ DRIVE ─obstacle appears─► CLASSIFY ─object / unknown─► ANNOUNCE ─�
 | `ANNOUNCE` | Stopped | Clip requested, short pause |
 | `CHECKPOINT` | Stopped | `/password/result`; path clear for 5 s → `/password/cancel`, `DRIVE`; no result in 60 s → `/password/cancel`, `WAIT_OPERATOR` |
 | `PASS` | Stopped | Plays `password_correct` (after `granted`) or `operator_allowed` (after `allow`), short pause; starts the 20 s cleared window |
-| `WAIT_OPERATOR` | Stopped | `allow` / `deny` for the current alert id, or 30 s. `resume` is ignored here |
+| `WAIT_OPERATOR` | Stopped | `allow` / `deny` for the current alert id, or 40 s. `resume` is ignored here |
 | `BLOCKING` | Stopped, `alert` and `blocking` repeat | `resume` for the current alert id, or `back` held 1 s → `AVOID` |
 | `AVOID` | `/avoidance/cmd_vel` | `/avoidance/result`; none in 10 s → `/avoidance/cancel`, then handled as `failed` |
 

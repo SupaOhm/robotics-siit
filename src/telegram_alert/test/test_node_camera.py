@@ -2,6 +2,7 @@
 than the photo. rclpy, cv2 and cv_bridge are faked, so this runs without ROS."""
 
 import importlib
+import json
 import sys
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -130,3 +131,112 @@ def test_cv_bridge_never_converts_colours(node, monkeypatch):
         frame(node, encoding)
         node.snapshot()
     assert set(FakeBridge.used) == {"passthrough"}
+
+
+def test_recordings_go_with_the_next_alert_and_are_deleted(node, monkeypatch, tmp_path):
+    # D32: password_node saves the failed answers and sends their paths
+    from telegram_alert import voice
+    monkeypatch.setattr(voice, "to_voice", lambda wav: ("voice", b"ogg:" + wav))
+    paths = []
+    for i in (1, 2):
+        path = tmp_path / ("%d.wav" % i)
+        path.write_bytes(b"wav%d" % i)
+        paths.append(path)
+        node.on_recording(SimpleNamespace(data=json.dumps({"path": str(path), "heard": "w%d" % i})))
+    node.on_recording(SimpleNamespace(data=json.dumps({"path": str(tmp_path / "gone.wav")})))
+    node.on_recording(SimpleNamespace(data="not json"))  # skipped
+    assert node.take_recordings() == [("voice", b"ogg:wav1", "w1"), ("voice", b"ogg:wav2", "w2")]
+    assert not any(p.exists() for p in paths)
+    assert node.take_recordings() == []  # used once
+# ----- countdown before the photo ----------------------------------------
+
+
+class FakeTimer:
+    started = []
+
+    def __init__(self, delay, function, args=()):
+        self.delay, self.function, self.args = delay, function, args
+
+    def start(self):
+        self.started.append(self)
+
+    def fire(self):
+        self.function(*self.args)
+
+
+@pytest.fixture
+def waiting(node, monkeypatch):
+    """(node, what it submitted to the bot); the timers fire by hand."""
+    FakeTimer.started = []
+    monkeypatch.setattr("threading.Timer", FakeTimer)
+    submitted = []
+    node.submit = submitted.append
+    frame(node)
+    working_bridge(monkeypatch)
+    return node, submitted
+
+
+def test_alert_plays_the_countdown_and_waits_for_the_photo(waiting):
+    node, submitted = waiting
+    node.on_alert(SimpleNamespace(data="a1"))
+    sys.modules["std_msgs.msg"].String.assert_called_with(data="photo_countdown")
+    assert node.audio_pub.publish.call_count == 1
+    assert submitted == [] and FakeTimer.started[0].delay == 10.5
+    FakeTimer.started[0].fire()
+    assert len(submitted) == 1
+
+
+def test_card_shows_the_time_left_after_the_countdown(node):
+    assert node.bot.book.timeout_s == 29  # 40 s - 10.5 s
+
+
+def test_robot_leaving_during_the_countdown_skips_the_card(waiting):
+    node, submitted = waiting
+    node.on_robot_state(SimpleNamespace(data="WAIT_OPERATOR"))
+    node.on_alert(SimpleNamespace(data="a1"))
+    node.on_robot_state(SimpleNamespace(data="DRIVE"))
+    FakeTimer.started[0].fire()
+    assert len(submitted) == 1  # only the robot_state close, no alert
+
+
+def test_a_state_message_that_lags_the_alert_keeps_the_card(waiting):
+    node, submitted = waiting
+    node.on_robot_state(SimpleNamespace(data="CHECKPOINT"))
+    node.on_alert(SimpleNamespace(data="a1"))
+    node.on_robot_state(SimpleNamespace(data="WAIT_OPERATOR"))
+    FakeTimer.started[0].fire()
+    assert len(submitted) == 2  # the state change, then the alert
+
+
+def test_a_newer_alert_replaces_one_still_counting_down(waiting):
+    node, submitted = waiting
+    node.on_alert(SimpleNamespace(data="a1"))
+    node.on_alert(SimpleNamespace(data="a2"))
+    for timer in FakeTimer.started:
+        timer.fire()
+    assert len(submitted) == 1
+
+
+def test_retake_plays_the_countdown_then_sends_a_new_photo(waiting):
+    node, submitted = waiting
+    node.start_retake("card")
+    assert node.audio_pub.publish.call_count == 1
+    assert FakeTimer.started[0].delay == 7.0 and submitted == []
+    FakeTimer.started[0].fire()
+    assert len(submitted) == 1
+
+
+def test_a_skipped_alert_never_passes_its_recordings_to_the_next_one(waiting, monkeypatch, tmp_path):
+    # D32 with the countdown: the voice must not go out with another person's photo
+    from telegram_alert import voice
+    monkeypatch.setattr(voice, "to_voice", lambda wav: ("voice", b"ogg:" + wav))
+    node, submitted = waiting
+    path = tmp_path / "1.wav"
+    path.write_bytes(b"wav1")
+    node.on_robot_state(SimpleNamespace(data="WAIT_OPERATOR"))
+    node.on_recording(SimpleNamespace(data='{"path": "%s", "heard": ""}' % path.as_posix()))
+    node.on_alert(SimpleNamespace(data="a1"))
+    node.on_robot_state(SimpleNamespace(data="DRIVE"))
+    FakeTimer.started[0].fire()
+    assert not path.exists()
+    assert node.take_recordings() == []

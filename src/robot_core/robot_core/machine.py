@@ -1,10 +1,11 @@
 """Security robot state machine (ROS-independent).
 
-Follows docs/interfaces.md (contract v0.3, D2-D15, D28-D30). The ROS node
+Follows docs/interfaces.md (contract v0.3, D2-D15, D28-D31). The ROS node
 feeds it messages and the time; every method returns the messages to
 publish as a list of (topic, data) pairs:
 
   /cmd_vel                            (linear, angular)
+  /camera/tilt                        int, degrees
   /robot/state, /audio/play,
   /detect/request, /telegram/alert,
   /telegram/blocking                  str
@@ -48,10 +49,12 @@ class Settings:
     cleared_window: float = 20.0    # after PASS a person counts as unknown (D12)
     checkpoint_clear: float = 5.0   # path clear this long -> person left (D29)
     checkpoint_timeout: float = 60.0  # no /password/result (D30)
-    operator_timeout: float = 30.0  # no Telegram decision (D15)
+    operator_timeout: float = 40.0  # no Telegram decision (D15)
     blocking_repeat: float = 3.0    # alert + blocking clips
     back_hold: float = 1.0          # `back` held this long -> override (D11)
     avoid_timeout: float = 10.0     # no /avoidance/result (D30)
+    tilt_level: float = 30.0        # camera tilt for driving and the detector (D31)
+    tilt_up: float = 90.0           # camera tilt to see the person's face (D31)
 
 
 class StateMachine:
@@ -76,6 +79,7 @@ class StateMachine:
         self.announce_clip = None
         self.pass_clip = None
         self.blocking_next = 0.0
+        self.tilt = None  # last /camera/tilt sent; the node sends tilt_level at start
         self._counts = {}
 
     # Inputs
@@ -205,6 +209,12 @@ class StateMachine:
         self.state = state
         self.entered_at = now
         out = [("/robot/state", state)]
+        # Up while a person is in front (D31), so the Telegram photo shows a face
+        person = state in (CHECKPOINT, WAIT_OPERATOR, BLOCKING)
+        tilt = int(self.s.tilt_up if person else self.s.tilt_level)
+        if tilt != self.tilt:
+            self.tilt = tilt
+            out.append(("/camera/tilt", tilt))
         if state == CLASSIFY:
             self.detect_retried = False
             out.append(("/cmd_vel", (0.0, 0.0)))  # stopped before the frame
