@@ -17,7 +17,7 @@ the answer. No loudness threshold to tune per room or mic gain.
 | Run | Threshold `listen()` (today) | Vosk streaming |
 |---|---|---|
 | `--digits`, 10 tries, gain 40% | 6/10 | **10/10** |
-| password 67, 3 tries | 3/3 | 3/3 |
+| the robot's 2-digit test password, 3 tries | 3/3 | 3/3 |
 
 All 4 misses were speech quieter than `energy_threshold` 4000 (loudest
 1915 to 3228; room noise 110 to 210). Earlier the threshold calibrated to
@@ -44,6 +44,10 @@ listen_once()
 
 Reference code that already runs on the robot: `VoskStream` and `Mic` in
 `tools/mic_check.py` (Logic 2).
+
+**Reference test:** [mic-check-results-nov5.md](mic-check-results-nov5.md)
+has the exact commands and today's raw output. The build should match or beat
+Logic 2 there.
 
 ## Must stay the same
 
@@ -79,7 +83,7 @@ Reference code that already runs on the robot: `VoskStream` and `Mic` in
    `speech` at its first phrase, `no_speech` after 6 s without words, and
    stops on cancel. Free-speech text only reaches `free_text`.
 2. **On the robot:** `mic_check --digits` is still at least 9/10, and a real
-   session with `password_test.py` grants "six seven" (password 67) and
+   session with `password_test.py` grants the robot's test password and
    denies a wrong digit with the voice reply on Telegram.
 3. **Docs:** D34 says built, and the README's `energy_threshold` row says
    it applies to `engine: google` only.
