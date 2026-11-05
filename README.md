@@ -19,6 +19,7 @@ package under `src/`, created and owned by its lane.
 
 ```
 src/
+  robot_core/         Lane 1, state machine, the only /cmd_vel publisher (state_machine)
   gesture_control/    Lane 2, hand gestures on the laptop (gesture_node)
   object_detection/   Lane 2, YOLO object naming (detector_node)
   audio_player/       Lane 4, spoken clips (audio_node)
@@ -27,11 +28,10 @@ src/
   obstacle_avoidance/ Lane 3, obstacle stop and turn-away (avoidance_node)
   ...                 other packages are added by their lanes
 docs/                 interface contract, decisions, robot setup
+sim/                  CoppeliaSim scenes (Lane 5)
 external/             third-party source kept as git submodules (see below)
 tools/                setup, demo and benchmark scripts (not ROS packages)
 ```
-
-`sim/` (CoppeliaSim scenes, Lane 5) is planned but not created yet.
 
 ## External sources
 
