@@ -33,6 +33,7 @@ Example: `found_chair`
 - password_prompt
 - password_wrong
 - password_denied
+- photo_countdown
 - password_correct
 - operator_allowed
 - alert
@@ -72,7 +73,7 @@ and a configured audio output device.
 ## Status
 
 - Windows WAV playback: tested
-- Queue / cooldown / alert priority / logging: 11 unit tests passed on Ubuntu
+- Queue / cooldown / alert priority / logging: 12 unit tests passed on Ubuntu
 - ROS 2 Humble build and launch: tested in Ubuntu VM
 - ROS logging through /rosout: tested
 - Backpack, laptop and cup audio: played successfully in Ubuntu VM
