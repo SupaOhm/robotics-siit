@@ -28,7 +28,6 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Empty, String
 
-from .normalize import normalize
 from .recordings import AttemptRecordings
 from .verifier import PasswordVerifier, outputs_for, parse_stored
 
@@ -141,13 +140,10 @@ class PasswordNode(Node):
             return
         os.makedirs(self.recording_dir, exist_ok=True)
         stamp = time.strftime("%Y%m%d-%H%M%S")
-        for i, (wav, heard) in enumerate(clips, 1):
+        for i, wav in enumerate(clips, 1):
             path = os.path.join(self.recording_dir, "%s_%d.wav" % (stamp, i))
             with open(path, "wb") as f:
                 f.write(wav)
-            if heard:  # beside the WAV, so the topic stays one path
-                with open(path + ".txt", "w") as f:
-                    f.write(heard)
             self.recording_pub.publish(String(data=path))
 
     def on_start(self, _msg) -> None:
@@ -225,8 +221,7 @@ class PasswordNode(Node):
                 if result.kind == "error":
                     self.get_logger().warning(result.error)
                 events = self.verifier.handle(result)
-                heard = " ".join(normalize(result.candidates[0])) if result.candidates else ""
-                self.publish_recordings(self.recordings.handle(result.wav, events, heard))
+                self.publish_recordings(self.recordings.handle(result.wav, events))
                 self.publish(events)
                 if not self.verifier.active:
                     return

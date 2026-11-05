@@ -189,10 +189,8 @@ class AlertBot:
     async def _send_voices(self, card: Card, voices) -> None:
         """Each answer once, as a reply to the card; a failure skips it."""
         chat = self.settings.chat_id
-        for i, (kind, data, *heard) in enumerate(voices, 1):
+        for i, (kind, data) in enumerate(voices, 1):
             caption = "Answer %d of alert %s" % (i, card.alert_id)
-            if heard and heard[0]:
-                caption += ": heard %s" % heard[0]
             if kind == "voice":
                 sent = await self._call("send voice", lambda: self.bot.send_voice(
                     chat_id=chat, voice=data, caption=caption,

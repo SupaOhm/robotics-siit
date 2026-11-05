@@ -102,8 +102,8 @@ class TelegramNode(Node):
         del self._recordings[:-MAX_RECORDINGS]
 
     def take_recordings(self):
-        """The waiting answers as (kind, bytes, heard) for Telegram. Each file
-        is read once and deleted: it holds a person's voice."""
+        """The waiting answers as (kind, bytes) for Telegram. Each file is
+        read once and deleted: it holds a person's voice."""
         out = []
         paths, self._recordings = self._recordings, []
         for path in paths:
@@ -114,20 +114,8 @@ class TelegramNode(Node):
             except OSError as e:
                 self.get_logger().warning("recording %s skipped: %s" % (path, e))
                 continue
-            heard = self.take_heard(path)
-            self.get_logger().info("failed answer heard: %s" % (heard or "(nothing clear)"))
-            out.append(voice.to_voice(wav) + (heard,))
+            out.append(voice.to_voice(wav))
         return out
-
-    def take_heard(self, wav_path: str) -> str:
-        """The text password_node saved beside a recording, if any."""
-        try:
-            with open(wav_path + ".txt") as f:
-                heard = f.read().strip()
-            os.remove(wav_path + ".txt")
-            return heard
-        except OSError:
-            return ""
 
     def snapshot(self):
         """(jpeg bytes or None, note for the caption)."""

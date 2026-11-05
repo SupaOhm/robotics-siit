@@ -128,7 +128,7 @@ and the direction from ±90° to the sides; ultrasonic sees the front only.
 | `/password/start` | `std_msgs/Empty` | state_machine → password_node | Person found: start a session (3 attempts) |
 | `/password/cancel` | `std_msgs/Empty` | state_machine → password_node | Abort: the operator took over, or the person walked away |
 | `/password/result` | `std_msgs/String` | password_node → state_machine | One per session: `granted`, `denied` (3 wrong, or 3 mic or speech engine failures in a row) or `cancelled` |
-| `/password/recording` | `std_msgs/String` | password_node → telegram_node | Path of a WAV on the robot: one failed answer. Only for a `denied` session, published before the result. `<path>.txt` beside it holds the digits heard, if any (D32) |
+| `/password/recording` | `std_msgs/String` | password_node → telegram_node | Path of a WAV on the robot: one failed answer. Only for a `denied` session, published before the result (D32) |
 
 - The password node plays its own prompts through `/audio/play`
   (`password_prompt`, `password_wrong`, `password_denied`).
@@ -179,8 +179,7 @@ topic is never used on the robot.
 | `/telegram/decision` | `std_msgs/String` (JSON) | telegram_node → state_machine | `{"id": "a3", "decision": "allow"}`; `decision` is `allow`, `deny` or `resume` |
 
 - The next alert after `/password/recording` paths arrive sends them as
-  voice messages replying to the photo card, with the digits heard in the
-  caption, then deletes the files (D32).
+  voice messages replying to the photo card, then deletes the files (D32).
 
 - The state machine ignores a decision whose `id` isn't the current alert.
 - The 30 s timeout is in the state machine (D15), so the Telegram node

@@ -19,7 +19,7 @@ run anywhere without ROS or a microphone.
 | `/password/cancel` | `std_msgs/Empty` | in | Abort: the operator took over, or the person left |
 | `/password/result` | `std_msgs/String` | out | One per session: `granted`, `denied` or `cancelled` |
 | `/audio/play` | `std_msgs/String` | out | The node's own prompts (see below) |
-| `/password/recording` | `std_msgs/String` | out | Path of a WAV of one failed answer, only when the session is `denied` (D32). The digits heard are in `<path>.txt`. Saved in `recording_dir` (`/tmp/password_attempts`) |
+| `/password/recording` | `std_msgs/String` | out | Path of a WAV of one failed answer, only when the session is `denied` (D32). Saved in `recording_dir` (`/tmp/password_attempts`) |
 | `/password/sim_input` | `std_msgs/String` | in | One typed attempt, `input_mode: sim` only (D27). `""` = nobody spoke |
 
 | When | Clip on `/audio/play` |

@@ -143,7 +143,7 @@ def test_recordings_go_with_the_next_alert_and_are_deleted(node, monkeypatch, tm
         paths.append(path)
         node.on_recording(SimpleNamespace(data=str(path)))
     node.on_recording(SimpleNamespace(data=str(tmp_path / "gone.wav")))  # skipped
-    assert node.take_recordings() == [("voice", b"ogg:wav1", ""), ("voice", b"ogg:wav2", "")]
+    assert node.take_recordings() == [("voice", b"ogg:wav1"), ("voice", b"ogg:wav2")]
     assert not any(p.exists() for p in paths)
     assert node.take_recordings() == []  # used once
 # ----- countdown before the photo ----------------------------------------
@@ -238,15 +238,3 @@ def test_a_skipped_alert_never_passes_its_recordings_to_the_next_one(waiting, mo
     FakeTimer.started[0].fire()
     assert not path.exists()
     assert node.take_recordings() == []
-
-
-def test_heard_text_goes_with_its_recording_and_is_deleted(node, monkeypatch, tmp_path):
-    from telegram_alert import voice
-    monkeypatch.setattr(voice, "to_voice", lambda wav: ("voice", b"ogg:" + wav))
-    path = tmp_path / "1.wav"
-    path.write_bytes(b"wav1")
-    (tmp_path / "1.wav.txt").write_text("1 2 3 4")
-    node.on_recording(SimpleNamespace(data=str(path)))
-    assert node.take_recordings() == [("voice", b"ogg:wav1", "1 2 3 4")]
-    assert list(tmp_path.iterdir()) == []
-    assert any("heard: 1 2 3 4" in str(c) for c in node.logger.info.call_args_list)
