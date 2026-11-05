@@ -1,7 +1,7 @@
 """Turn-away-and-resume logic (ROS-independent).
 
 The main state machine starts a turn after the robot has stopped and named
-the obstacle. The A1 has mecanum wheels, so the robot turns in place until
+the obstacle. The M1 has mecanum wheels, so the robot turns in place until
 the corridor ahead has been clear for ``clear_time`` seconds, then reports
 DONE so the state machine can hand driving back to the operator.
 

@@ -30,8 +30,11 @@ dpkg -s "$PKG" >/dev/null 2>&1 || sudo apt-get install -y "$PKG"
 
 # Drop old values (some images set domain 61), then append ours
 touch "$RC"
-cp "$RC" "$RC.bak"
-grep -vE '^export (ROS_DOMAIN_ID|ROS_LOCALHOST_ONLY|RMW_IMPLEMENTATION)=' "$RC.bak" > "$RC" || true
+[ -f "$RC.bak" ] || cp "$RC" "$RC.bak"   # keep the first, unedited backup on re-runs
+TMP=$(mktemp)
+cp "$RC" "$TMP"
+grep -vE '^export (ROS_DOMAIN_ID|ROS_LOCALHOST_ONLY|RMW_IMPLEMENTATION)=' "$TMP" > "$RC" || true
+rm -f "$TMP"
 grep -qxF 'source /opt/ros/humble/setup.bash' "$RC" || echo 'source /opt/ros/humble/setup.bash' >> "$RC"
 cat >> "$RC" <<'EOF'
 export ROS_DOMAIN_ID=42

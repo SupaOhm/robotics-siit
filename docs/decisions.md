@@ -42,7 +42,7 @@ bring-up checklist is in [robot-setup.md](robot-setup.md).
 | D16 | Robot OS | Yahboom image, ROS 2 Humble, **headless** (desktop off) | Fresh Ubuntu 22.04 (no official Pi 5 support); Ubuntu 24.04 + Jazzy (doesn't match CI); Pi OS + Humble in Docker (fallback) | 1 |
 | D17 | Network | **Phone hotspot** for robot and laptop (also gives Telegram internet) | Campus Wi-Fi (captive portal, multicast and client isolation risks) | 1, 2 |
 | D18 | Where inference runs | Gestures on the laptop, YOLO on the robot (moves to the laptop if too slow) | All on the robot; all on the laptop | 2, 5 |
-| D19 | Distance sensor | LiDAR if the A1 has one, else front ultrasonic. Lane 3 supports both | ToF; camera depth | 3 |
+| D19 | Distance sensor | LiDAR if the M1 has one, else front ultrasonic. Lane 3 supports both | ToF; camera depth | 3 |
 | D20 | Detection model | YOLO nano (YOLO11n / v8n), COCO pretrained, **NCNN** export, 320 px | PyTorch `.pt` (slower); YOLO small (too slow); MobileNet-SSD (less accurate) | 2, 5 |
 | D21 | Detection camera | Robot's onboard camera (also the Telegram photo) | Extra USB webcam at person height | 2 |
 | D22 | Microphone | USB mic on the robot. fah (Lane 4) gets it | Yahboom voice module (often fixed words only); laptop mic | 1, 4 |
@@ -75,8 +75,8 @@ Results from the robot session (#27). Details in [robot-setup.md](robot-setup.md
 | D18 | Confirmed | YOLO stays on the robot. Time limit per frame: **1.0 s** (#29). `detector_node` replies in 0.13 to 0.27 s including the wait for a frame, about 0.75 s for the first request, inside the 3 s `CLASSIFY` timeout. Gestures on purin's Mac reach the robot at about 10 Hz |
 | D19 | Confirmed | LiDAR fitted: `ydlidar_ros2_driver_node` on `/scan`. Objects below the beam are never seen (Lane 3) |
 | D20 | Confirmed | NCNN export of YOLO11n at 320 px runs in the container (`ultralytics`, `ncnn`, NumPy 1.26.4) |
-| D21 | Confirmed | `/camera/image_raw`: USB webcam, 640x480, 8 to 10 Hz, no depth camera. It sits at floor level, so a person at 0.30 m shows only legs: found in 6 of 6 (shorts) and 4 of 4 (regular trousers), but 2 of 5 for baggy jeans filling the image (Lane 2, open) |
-| D22 | Open | The voice board (sound card 2) has capture and playback and is visible in the container. Recording quality not checked yet (Lane 4) |
+| D21 | Confirmed | `/camera/image_raw`: USB webcam, 640x480, 8 to 10 Hz, no depth camera. It sits at floor level, so a person at 0.30 m shows only legs: found in 6 of 6 (shorts) and 4 of 4 (regular trousers), but 2 of 5 for baggy jeans filling the image (Lane 2, open). For the Telegram photo, D31 (#37) tilts the camera up in `CHECKPOINT`, so the photo shows the face |
+| D22 | Open | The voice board (sound card 2) has capture and playback and is visible in the container. Recording works; `audio_player` needs `ALSA_CARD=2`, because the default card is HDMI and silent. At 100% capture (+23 dB) Vosk missed almost all spoken digits and the recording clipped, so the test password is a word for now (#37). Digits and capture level still open (Lane 4) |
 
 ## Changes to PLAN.md (made in this PR)
 

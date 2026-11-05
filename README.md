@@ -1,6 +1,6 @@
 # robotics-siit: AI gesture-controlled security robot
 
-A Yahboom RosmasterPi A1 that the operator drives with hand gestures. It
+A Yahboom ROSMASTER M1 that the operator drives with hand gestures. It
 stops at obstacles, names them in English, and checks people at a
 spoken-password checkpoint, alerting the operator on Telegram when a
 password fails.
