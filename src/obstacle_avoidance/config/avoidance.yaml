@@ -25,7 +25,7 @@ avoidance_node:
     # in place. The state machine cancels AVOID after 10 s with no result, so
     # keep max_turn_deg / turn_speed (in rad) + clear_time well under 10 s.
     imu_topic: "/imu/data_raw"  # gyro for the turned angle; "" = estimate it as speed x time
-    imu_timeout: 0.2            # no gyro reading this long -> speed x time until it's back (s)
+    imu_timeout: 0.3            # no gyro reading this long -> speed x time until it's back (s)
     turn_speed: 1.0             # rad/s while turning in place
     min_turn_deg: 30.0
     max_turn_deg: 270.0         # turned this far with no clear front -> "failed"
