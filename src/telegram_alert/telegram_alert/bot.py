@@ -192,7 +192,7 @@ class AlertBot:
         chat = self.settings.chat_id
         for i, (kind, data, heard) in enumerate(voices, 1):
             caption = "Answer %d of alert %s: %s" % (
-                i, card.alert_id, 'heard "%s"' % heard if heard else "no digits recognised")
+                i, card.alert_id, 'heard "%s"' % heard if heard else "nothing clear heard")
             if kind == "voice":
                 sent = await self._call("send voice", lambda: self.bot.send_voice(
                     chat_id=chat, voice=data, caption=caption,

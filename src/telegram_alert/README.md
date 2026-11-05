@@ -18,7 +18,6 @@ is needed.
 | `/telegram/blocking` | `std_msgs/String` | in | A **new** alert id. Deny or 30 s timeout happened: send "Robot is blocking" with **Resume** |
 | `/telegram/decision` | `std_msgs/String` (JSON) | out | `{"id": "a3", "decision": "allow"}`. `decision` is `allow`, `deny` or `resume` |
 | `/robot/state` | `std_msgs/String` | in | Leaving `WAIT_OPERATOR` or `BLOCKING` (e.g. the operator held `back`) closes that state's buttons |
-| `/password/recording` | `std_msgs/String` | in | WAV path of a failed password answer. Sent with the next alert as a voice reply to its card, then deleted (D32). Needs `ffmpeg` for voice messages; without it the WAV goes as a file |
 | `/audio/play` | `std_msgs/String` | out | `photo_countdown`, played on each alert |
 | `/password/recording` | `std_msgs/String` (JSON) | in | `{"path", "heard"}`: a failed password answer. Sent with the next alert as a voice reply to its card, captioned with what was heard, then deleted (D32). Needs `ffmpeg` for voice messages; without it the WAV goes as a file |
 | `/camera/image_raw` | `sensor_msgs/Image` | in | Camera frames. Only the latest is kept, as raw bytes; it is decoded only when an alert comes in |

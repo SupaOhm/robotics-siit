@@ -9,8 +9,9 @@ config/password.yaml.
 
 The password is normalized first (see normalize.py), so "four seven one
 nine", "4 7 1 9" and "4719" all give the same hash. Digits, or a word
-(D23): for a word, also set the password node's ``vosk_words`` to it on the
-robot, because Vosk only hears the words it is given.
+(D23): for a word, keep ``vosk_free_speech`` on, or set the password node's
+``vosk_words`` to it on the robot, because Vosk's grammar only has the words
+it is given.
 """
 
 import argparse

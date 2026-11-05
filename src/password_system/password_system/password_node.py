@@ -47,6 +47,7 @@ class PasswordNode(Node):
         p("language", "en-US")
         p("mic_device_index", -1)  # -1 = system default microphone
         p("vosk_model_path", "")
+        p("vosk_free_speech", False)  # hear any English, not only digits and vosk_words
         p("vosk_words", "")  # extra words Vosk may hear, e.g. a word password; set on the robot only
         p("listen_delay", 2.5)
         p("listen_timeout", 6.0)
@@ -103,6 +104,7 @@ class PasswordNode(Node):
                 listen_timeout=float(g("listen_timeout")),
                 phrase_time_limit=float(g("phrase_time_limit")),
                 vosk_model_path=g("vosk_model_path"),
+                vosk_free_speech=g("vosk_free_speech"),
                 vosk_words=g("vosk_words"),
                 operation_timeout=float(g("operation_timeout")),
                 energy_threshold=float(g("energy_threshold")),

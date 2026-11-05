@@ -1,8 +1,8 @@
 # password_system (Lane 4, spoken password)
 
 `password_node`: when the robot finds a person, it asks for the password.
-The person **says the digits** into the robot's USB microphone. The node
-recognizes them **offline with Vosk**, using a vocabulary of digit words
+The person **says the password** (digits or a word) into the robot's USB microphone. The node
+recognizes it **offline with Vosk**; `vosk_free_speech` hears any English, otherwise a vocabulary of digit words
 only, and checks them. The person gets **3 attempts**. After 3 failures the
 node reports `denied`, and the state machine starts the alert and Telegram
 flow.

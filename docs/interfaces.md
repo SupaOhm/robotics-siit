@@ -132,7 +132,7 @@ and the direction from ±90° to the sides; ultrasonic sees the front only.
 
 - The password node plays its own prompts through `/audio/play`
   (`password_prompt`, `password_wrong`, `password_denied`).
-- Default engine: Vosk offline, vocabulary limited to the digits (D24).
+- Default engine: Vosk offline. `vosk_free_speech` (on in `password.yaml`) hears any English, so a word password needs no word list and `/password/recording` carries what was really said. Off, the vocabulary is the digits plus `vosk_words` (D24).
 - What the person says is never logged, and the password itself is kept
   out of the repo. Failed answers are recorded only for a `denied`
   session, for the operator (D32). A correct answer is never saved, since

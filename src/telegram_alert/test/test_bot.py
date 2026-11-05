@@ -275,7 +275,7 @@ def test_failed_answers_follow_the_alert_as_replies():
     assert "Answer 1" in voice["caption"] and 'heard "six seven six six"' in voice["caption"]
     assert doc["document"] == b"wav2" and doc["reply_to_message_id"] == 2
     assert doc["filename"].endswith(".wav") and "Answer 2" in doc["caption"]
-    assert "no digits recognised" in doc["caption"]
+    assert "nothing clear heard" in doc["caption"]
 
 
 def test_failed_voice_send_keeps_the_alert():

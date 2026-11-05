@@ -234,7 +234,7 @@ def test_a_skipped_alert_never_passes_its_recordings_to_the_next_one(waiting, mo
     path = tmp_path / "1.wav"
     path.write_bytes(b"wav1")
     node.on_robot_state(SimpleNamespace(data="WAIT_OPERATOR"))
-    node.on_recording(SimpleNamespace(data=str(path)))
+    node.on_recording(SimpleNamespace(data='{"path": "%s", "heard": ""}' % path.as_posix()))
     node.on_alert(SimpleNamespace(data="a1"))
     node.on_robot_state(SimpleNamespace(data="DRIVE"))
     FakeTimer.started[0].fire()

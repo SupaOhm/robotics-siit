@@ -25,9 +25,13 @@ DIGIT_WORDS = ["zero", "oh", "one", "two", "three", "four", "five", "six",
 VOSK_GRAMMAR = json.dumps(DIGIT_WORDS + ["[unk]"])
 
 
-def vosk_grammar(extra_words: str = "") -> str:
+def vosk_grammar(extra_words: str = "", free_speech: bool = False) -> Optional[str]:
     """The grammar with extra words ("hello, banana") for a word password.
-    They're set on the robot, not in the repo: the password is one of them."""
+    They're set on the robot, not in the repo: the password is one of them.
+    With free_speech there is no grammar: Vosk hears any English, so the
+    operator reads what the person really said (D32)."""
+    if free_speech:
+        return None
     extra = [w for w in extra_words.lower().replace(",", " ").split() if w]
     return json.dumps(DIGIT_WORDS + extra + ["[unk]"])
 
@@ -73,6 +77,7 @@ class SpeechListener:
         operation_timeout: float = 10.0,
         energy_threshold: float = 0.0,
         vosk_words: str = "",
+        vosk_free_speech: bool = False,
     ):
         if engine not in ENGINES:
             raise ValueError("engine must be one of %s" % (ENGINES,))
@@ -94,7 +99,7 @@ class SpeechListener:
         # Google only: give up on a dropped connection instead of hanging
         self.recognizer.operation_timeout = operation_timeout
 
-        self._grammar = vosk_grammar(vosk_words)
+        self._grammar = vosk_grammar(vosk_words, vosk_free_speech)
         self._vosk_model = None
         if engine == "vosk":
             # No download at startup: the venue may have no internet.
@@ -145,7 +150,8 @@ class SpeechListener:
             return google_candidates(response)
 
         from vosk import KaldiRecognizer
-        rec = KaldiRecognizer(self._vosk_model, 16000, self._grammar)
+        args = (self._grammar,) if self._grammar else ()
+        rec = KaldiRecognizer(self._vosk_model, 16000, *args)
         rec.SetMaxAlternatives(3)
         rec.AcceptWaveform(audio.get_raw_data(convert_rate=16000, convert_width=2))
         return vosk_candidates(rec.FinalResult())

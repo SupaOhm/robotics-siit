@@ -73,3 +73,10 @@ def test_extra_words_join_the_vosk_vocabulary():
     assert "hello" in words and "banana" in words and "seven" in words
     assert words[-1] == "[unk]"
     assert vosk_grammar("") == VOSK_GRAMMAR
+
+
+def test_free_speech_has_no_grammar():
+    from password_system.speech import vosk_grammar
+    assert vosk_grammar("", free_speech=True) is None
+    assert vosk_grammar("anything", free_speech=True) is None
+    assert "six" in json.loads(vosk_grammar())
