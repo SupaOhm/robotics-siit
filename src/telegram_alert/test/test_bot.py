@@ -413,3 +413,11 @@ def test_retake_timeout_is_not_reported_as_failed():
     asyncio.run(go())
     assert kinds(fake) == ["send_photo"]
     assert any("may still arrive" in w for w in warnings)
+
+
+def test_voice_reply_says_what_was_heard():
+    bot, fake, _, _ = make()
+    asyncio.run(bot.alert("a1", b"jpeg", voices=[("voice", b"ogg1", "1 2 3 4"),
+                                                 ("voice", b"ogg2", "")]))
+    assert fake.calls[1][1]["caption"] == "Answer 1 of alert a1: heard 1 2 3 4"
+    assert fake.calls[2][1]["caption"] == "Answer 2 of alert a1"
