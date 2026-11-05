@@ -67,7 +67,7 @@ def closest_return(ranges, angle_min, angle_increment, center_deg=0.0, half_widt
         if abs(wrap(a - math.radians(center_deg))) > math.radians(half_width_deg):
             continue
         if best is None or r < best[0]:
-            best = (r, math.degrees(wrap(angle_min + i * angle_increment)))
+            best = (r, math.degrees(wrap(a)))
     return best
 
 
@@ -82,8 +82,9 @@ def judge_front_angle(angle, configured):
     if abs(off) <= 20:
         return "PASS", "box seen at %+.0f deg: front_angle_deg %.1f is right" % (angle, configured)
     if abs(off) >= 160:
-        flipped = math.degrees(wrap(math.radians(configured + 180)))
-        return "WARN", "box seen at %+.0f deg, behind front_angle_deg %.1f: set it to %.1f" % (angle, configured, abs(flipped))
+        flipped = (configured + 180) % 360
+        flipped = flipped - 360 if flipped > 180 else flipped
+        return "WARN", "box seen at %+.0f deg, behind front_angle_deg %.1f: set it to %.1f" % (angle, configured, flipped)
     return "WARN", "box seen at %+.0f deg: set front_angle_deg to about %.0f" % (angle, angle)
 
 
@@ -126,6 +127,7 @@ def judge_imu(rates, commanded):
 def run(args):
     import rclpy
     from geometry_msgs.msg import Twist
+    from rclpy.executors import ExternalShutdownException
     from rclpy.node import Node
     from rclpy.qos import qos_profile_sensor_data
     from rclpy.signals import SignalHandlerOptions
@@ -176,7 +178,7 @@ def run(args):
     def spin():
         try:
             rclpy.spin(node)
-        except Exception:
+        except ExternalShutdownException:
             pass  # rclpy.shutdown() at the end ends the spin
 
     threading.Thread(target=spin, daemon=True).start()
@@ -218,7 +220,7 @@ def run(args):
         else:
             report("FAIL", "%s: nothing in 3 s (ros2 topic list, ROS_DOMAIN_ID)" % args.scan_topic)
         if imus:
-            report(*judge_rate(args.imu_topic, len(imus) / 3.0, 10, 5,
+            report(*judge_rate(args.imu_topic, len(imus) / 3.0, 8, 4,
                                "imu_timeout is %.1f s, so the yaw keeps dropping out" % P["imu_timeout"]))
             report("INFO", "%s: QoS %s" % (args.imu_topic, node.reliability(args.imu_topic)))
         else:
