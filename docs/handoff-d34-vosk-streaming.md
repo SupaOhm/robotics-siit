@@ -111,5 +111,7 @@ Logic 2 there.
 
 ## Until it's built
 
-On the robot, start `password_node` with `-p energy_threshold:=1000.0`
-(about 5x the room noise; every miss above was louder than 1915).
+Built in #43. With `engine: vosk`, `password_node` no longer uses
+`energy_threshold`; it applies to `engine: google` only. Before #43 the
+robot ran `password_node` with `-p energy_threshold:=1000.0` (about 5x the
+room noise; every miss above was louder than 1915).

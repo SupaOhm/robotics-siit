@@ -4,12 +4,14 @@ Each try plays "Say the password", the "three, two, one" countdown and a
 beep, then listens up to 10 s from the moment the beep ends. The same audio goes
 through two listening logics at once, so they can be compared:
 
-  Logic 1, threshold listen (password_node today, SpeechRecognition's
-    listen()): speech starts when a chunk is louder than energy_threshold,
-    keeps 0.5 s from before, ends after 0.8 s of quiet or 5 s; no speech in
-    6 s = silence. The phrase is then transcribed.
-  Logic 2, Vosk streaming (proposed): every chunk goes straight to Vosk;
-    the first phrase it recognises as words is the answer. No threshold.
+  Logic 1, threshold listen (password_node before D34, now engine: google
+    only; SpeechRecognition's listen()): speech starts when a chunk is
+    louder than energy_threshold, keeps 0.5 s from before, ends after 0.8 s
+    of quiet or 5 s; no speech in 6 s = silence. The phrase is then
+    transcribed.
+  Logic 2, Vosk streaming (password_node since D34, #43): every chunk goes
+    straight to Vosk; the first phrase it recognises as words is the answer.
+    No threshold.
 
 Each logic is run with Vosk free speech (no word list) and with the grammar
 (digits + --words). The clip goes to Telegram with what each heard, whether
@@ -231,17 +233,17 @@ def caption(n, gain, r, verifier, threshold):
     q = lambda text: '"%s"' % text if text else "nothing"
     l1, t1 = r["logic1"], r["logic1_text"]
     if l1.result == "speech":
-        logic1 = ["Logic 1 · threshold listen (password_node now)",
+        logic1 = ["Logic 1 · threshold listen (before D34)",
                   "  speech %.2f–%.2f s" % (l1.start, l1.end),
                   "  free %s %s · grammar %s %s" % (q(t1["free"]), ok(t1["free"]),
                                                     q(t1["grammar"]), ok(t1["grammar"]))]
     else:
-        logic1 = ["Logic 1 · threshold listen (password_node now)",
+        logic1 = ["Logic 1 · threshold listen (before D34)",
                   "  ❌ no speech above %d in %.0f s (counts as silence)" % (threshold, ONSET_TIMEOUT)]
     f2, g2 = r["free2"], r["gram2"]
     lv = levels(r["raw"], threshold)
     return "\n".join(["🎙 Mic check %d (gain %s%%)" % (n, gain)] + logic1 + [
-        "Logic 2 · Vosk streaming (proposed)",
+        "Logic 2 · Vosk streaming (password_node)",
         "  free %s %s at %.2f s · grammar %s %s at %.2f s" % (
             q(f2.heard), ok(f2.heard), f2.at, q(g2.heard), ok(g2.heard), g2.at),
         "Levels: peak %.1f dBFS, RMS %.1f dBFS, clipped %.2f%%, noise %d, loudest %d" % (
@@ -256,8 +258,8 @@ def first_digit(text):
 
 
 def digit_row(word, r, model):
-    """Asked digit vs the first digit heard, as password_node's check does
-    (Logic 1, digits-only word list), plus Logic 2 and free speech."""
+    """Asked digit vs the first digit heard with the digits-only word list,
+    as password_node's check does, for Logic 1, Logic 2 and free speech."""
     want = normalize(word)
     l1 = r["logic1_text"].get("grammar", "") if r["logic1"].result == "speech" else ""
     l2 = r["gram2"].heard
@@ -268,7 +270,7 @@ def digit_row(word, r, model):
 
 
 def summary(rows):
-    lines = ["📊 Digit check: asked → heard (Logic 1 = password_node, Logic 2 = Vosk streaming)"]
+    lines = ["📊 Digit check: asked → heard (Logic 1 = threshold listen, Logic 2 = Vosk streaming as in password_node)"]
     for row in rows:
         lines.append("%s %s → %s %s · L2 %s %s · said \"%s\"" % (
             row["want"], row["word"], row["heard"], "✅" if row["ok1"] else "❌",
@@ -304,7 +306,7 @@ def main():
     ap.add_argument("--card", type=int, default=2, help="ALSA card (USB audio)")
     ap.add_argument("--device", type=int, default=0, help="PyAudio input device")
     ap.add_argument("--threshold", type=float, default=4000.0,
-                    help="password_node's energy_threshold (Logic 1)")
+                    help="energy_threshold for Logic 1 (password_node uses it with engine: google only)")
     ap.add_argument("--model", default="/root/share/vosk-model-small-en-us-0.15")
     ap.add_argument("--words", default="", help="extra grammar words (vosk_words); digits only by default")
     ap.add_argument("--match", default="first", help="match_mode, as in password.yaml")
