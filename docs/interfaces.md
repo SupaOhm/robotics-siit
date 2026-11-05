@@ -148,7 +148,7 @@ topic is never used on the robot.
 | Topic | Type | From → To | Meaning |
 |---|---|---|---|
 | `/audio/play` | `std_msgs/String` | anyone → audio_node | Clip id, e.g. `found_chair` |
-| `/audio/done` | `std_msgs/String` | audio_node → anyone | Clip id, when a clip has finished playing (not when interrupted). password_node opens the mic on `password_countdown` (D33) |
+| `/audio/done` | `std_msgs/String` | audio_node → anyone | Clip id, when a clip has finished playing (not when interrupted). password_node opens the mic on `password_beep` (D33) |
 
 - Requests that arrive while a clip plays are **queued**, not dropped.
   `alert` interrupts and plays at once.
@@ -164,7 +164,8 @@ topic is never used on the robot.
 | `found_obstacle` | "Found an obstacle" | state_machine (`ANNOUNCE`, avoidance failed) |
 | `password_prompt` | "Say the password" | password_node |
 | `password_wrong` | "Wrong, try again" | password_node |
-| `password_countdown` | "Three, two, one" (3.0 s) | password_node, after each prompt; the mic opens when it ends (D33) |
+| `password_countdown` | "Three, two, one" (2.4 s) | password_node, after each prompt (D33) |
+| `password_beep` | Beep (0.15 s): speak now | password_node, after the countdown; the mic opens as it ends (D33) |
 | `password_denied` | "Access denied, calling the operator" | password_node (after 3 wrong, or 3 mic or speech engine failures in a row) |
 | `photo_countdown` | "Please step back and look at the camera. Photo in 3, 2, 1" | telegram_node (on `/telegram/alert` and **Retake**) |
 | `password_correct` | "Password correct, you may pass" | state_machine (`PASS` after `granted`) |

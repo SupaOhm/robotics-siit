@@ -7,8 +7,8 @@ Follows docs/interfaces.md (contract v0.3, D9, D23, D24, D27):
                                     ("" = nobody spoke)
   pub  /password/result     String  "granted" | "denied" | "cancelled", once per session
   pub  /audio/play          String  password_prompt / password_wrong / password_denied,
-                                    then password_countdown before each listen
-  sub  /audio/done          String  a clip finished; password_countdown opens the mic (D33)
+                                    then password_countdown + password_beep before each listen
+  sub  /audio/done          String  a clip finished; password_beep opens the mic (D33)
   pub  /password/recording  String  JSON {"path": WAV of one failed answer,
                                     "heard": transcript}, only when the
                                     session is denied (D32)
@@ -19,8 +19,8 @@ What the person says is never logged. Failed answers are recorded for the
 operator only if the session is denied; a correct answer is never saved.
 
 In "mic" mode a worker thread runs the listen -> transcribe -> check loop.
-Each attempt starts the moment audio_node reports the "3, 2, 1" countdown
-clip done, so the robot's own voice is never recorded (D33). Without that
+Each attempt starts the moment audio_node reports the beep after the
+"3, 2, 1" countdown done, so the robot's own voice is never recorded (D33). Without that
 report in ``countdown_timeout`` (audio node down) it listens anyway.
 """
 
@@ -34,7 +34,7 @@ from rclpy.node import Node
 from std_msgs.msg import Empty, String
 
 from .recordings import AttemptRecordings, delete_old_recordings
-from .verifier import COUNTDOWN_CLIP, PasswordVerifier, outputs_for, parse_stored
+from .verifier import LISTEN_CLIP, PasswordVerifier, outputs_for, parse_stored
 
 
 class PasswordNode(Node):
@@ -144,7 +144,7 @@ class PasswordNode(Node):
             self.get_logger().info("%s (attempts left %d)"
                                    % (ev.type.value, ev.attempts_left))
         results, clips = outputs_for(events)
-        if COUNTDOWN_CLIP in clips:
+        if LISTEN_CLIP in clips:
             self._countdown_done.clear()  # before asking, so its done can't be missed
             self._countdown_pending = True
         for clip in clips:
@@ -166,7 +166,7 @@ class PasswordNode(Node):
             self.recording_pub.publish(String(data=json.dumps({"path": path, "heard": heard})))
 
     def on_audio_done(self, msg) -> None:
-        if msg.data == COUNTDOWN_CLIP:
+        if msg.data == LISTEN_CLIP:
             self._countdown_done.set()
 
     def wait_to_listen(self, cancel) -> bool:

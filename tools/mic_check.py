@@ -1,7 +1,7 @@
 """Mic check for the spoken password: where do the failures come from?
 
-Each try plays "Say the password" and the "three, two, one" countdown, then
-listens up to 10 s from the moment the countdown ends. The same audio goes
+Each try plays "Say the password", the "three, two, one" countdown and a
+beep, then listens up to 10 s from the moment the beep ends. The same audio goes
 through two listening logics at once, so they can be compared:
 
   Logic 1, threshold listen (password_node today, SpeechRecognition's
@@ -185,6 +185,7 @@ def to16k(raw):
 def one_try(mic, model, grammar, threshold, card, prompt="password_prompt"):
     play(prompt, card)
     play("password_countdown", card)
+    play("password_beep", card)  # "speak now": the mic opens as it ends, like password_node
     ended = time.monotonic()  # aplay returns once the clip has played
     mic.flush()
     logic1 = ThresholdListen(threshold)

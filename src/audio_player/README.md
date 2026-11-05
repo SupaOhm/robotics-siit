@@ -23,7 +23,7 @@ Example: `found_chair`
 
 When a clip finishes (not when interrupted), the node publishes its id on
 `/audio/done` (`std_msgs/String`). `password_node` opens the mic on
-`password_countdown` (D33).
+`password_beep` (D33).
 
 ## Available Clips
 
@@ -36,7 +36,8 @@ When a clip finishes (not when interrupted), the node publishes its id on
 - found_obstacle
 - password_prompt
 - password_wrong
-- password_countdown ("three, two, one": password_node opens the mic when it ends)
+- password_countdown ("three, two, one")
+- password_beep (password_node opens the mic as it ends)
 - password_denied
 - photo_countdown
 - password_correct

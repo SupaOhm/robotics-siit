@@ -166,15 +166,17 @@ def test_restart_resets_attempts():
 
 def test_outputs_start_plays_prompt():
     v = make()
-    # D33: "3, 2, 1" after every prompt; the mic opens when it ends
-    assert outputs_for(v.start()) == ([], ["password_prompt", "password_countdown"])
+    # D33: "3, 2, 1" and a beep after every prompt; the mic opens as the beep ends
+    assert outputs_for(v.start()) == ([], ["password_prompt", "password_countdown",
+                                           "password_beep"])
 
 
 def test_outputs_wrong_and_silence_play_wrong():
     v = make()
     v.start()
-    assert outputs_for(v.submit(["1111"])) == ([], ["password_wrong", "password_countdown"])
-    assert outputs_for(v.no_speech()) == ([], ["password_wrong", "password_countdown"])
+    cue = ["password_countdown", "password_beep"]
+    assert outputs_for(v.submit(["1111"])) == ([], ["password_wrong"] + cue)
+    assert outputs_for(v.no_speech()) == ([], ["password_wrong"] + cue)
 
 
 def test_outputs_last_failure_plays_only_denied():
@@ -205,10 +207,10 @@ def test_no_countdown_when_nothing_more_is_asked():
     # The last failure, a pass, or an engine failure (the mic retries at once)
     v = make(max_service_errors=2)
     v.start()
-    assert "password_countdown" not in outputs_for(v.service_error())[1]
+    assert "password_beep" not in outputs_for(v.service_error())[1]
     v.submit(["1111"])
     v.submit(["2222"])
-    assert "password_countdown" not in outputs_for(v.submit(["3333"]))[1]
+    assert "password_beep" not in outputs_for(v.submit(["3333"]))[1]
 
 
 def first_mode(password):

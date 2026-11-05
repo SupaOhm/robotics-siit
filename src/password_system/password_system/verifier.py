@@ -56,9 +56,11 @@ class Event:
     attempts_left: int
 
 
-# "Three, two, one" after every prompt; the mic opens when it
-# ends (/audio/done), so the robot's own voice is never recorded (D33)
+# "Three, two, one" and a beep after every prompt. The mic opens the moment
+# the beep ends (/audio/done), so the beep means "speak now" and the robot's
+# own voice is never recorded (D33)
 COUNTDOWN_CLIP = "password_countdown"
+LISTEN_CLIP = "password_beep"
 
 
 def outputs_for(events) -> Tuple[List[str], List[str]]:
@@ -70,7 +72,7 @@ def outputs_for(events) -> Tuple[List[str], List[str]]:
     if EventType.LOCKED_OUT in types:
         clips = [c for c in clips if c != "password_wrong"]
     elif clips:  # asked again: count down to the listen
-        clips.append(COUNTDOWN_CLIP)
+        clips += [COUNTDOWN_CLIP, LISTEN_CLIP]
     return results, clips
 
 
