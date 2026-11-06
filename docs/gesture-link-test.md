@@ -124,6 +124,11 @@ first, `bash tools/mac_ros_setup.sh run` should drive the wheels through
 the state machine. Do not run anything that publishes `/cmd_vel` from the
 Mac: only the state machine publishes it.
 
+Rehearse it on a laptop first, without the robot: `tools/gesture_drive_rehearsal.py`
+runs against the real `state_machine` on domain 43, localhost only, and checks
+the `/cmd_vel` it sends for each word, the 0.5 s gesture timeout, the blocked
+`forward` and the `CHECKPOINT` path. Steps are in the script's docstring.
+
 ## 5. If nothing arrives
 
 Work down the list; re-run section 2 after each fix.
