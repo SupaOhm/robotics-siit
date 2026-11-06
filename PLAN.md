@@ -19,7 +19,7 @@ people with a password.
    - Wrong (3 attempts): it plays an alert and sends a photo to the operator
      on Telegram with **Allow** / **Deny** buttons.
      - Allow: it announces that the person may pass, turns away and continues.
-     - Deny, or no reply in 30 s: it keeps blocking and the alert continues,
+     - Deny, or no reply in 40 s: it keeps blocking and the alert continues,
        until the operator presses **Resume** or holds the `back` gesture. Then
        it turns away (D11).
 
