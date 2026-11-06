@@ -137,6 +137,7 @@ def test_recordings_go_with_the_next_alert_and_are_deleted(node, monkeypatch, tm
     # D32: password_node saves the failed answers and sends their paths
     from telegram_alert import voice
     monkeypatch.setattr(voice, "to_voice", lambda wav: ("voice", b"ogg:" + wav))
+    node.recording_dir = str(tmp_path)
     paths = []
     for i in (1, 2):
         path = tmp_path / ("%d.wav" % i)
@@ -148,6 +149,18 @@ def test_recordings_go_with_the_next_alert_and_are_deleted(node, monkeypatch, tm
     assert node.take_recordings() == [("voice", b"ogg:wav1", "w1"), ("voice", b"ogg:wav2", "w2")]
     assert not any(p.exists() for p in paths)
     assert node.take_recordings() == []  # used once
+def test_a_recording_outside_the_directory_is_ignored_and_kept(node, tmp_path):
+    # A /password/recording message must not make the node send or delete other files
+    attempts = tmp_path / "attempts"
+    attempts.mkdir()
+    node.recording_dir = str(attempts)
+    other = tmp_path / "secret.wav"
+    other.write_bytes(b"x")
+    node.on_recording(SimpleNamespace(data=json.dumps({"path": str(other), "heard": ""})))
+    assert node.take_recordings() == []
+    assert other.exists()
+
+
 # ----- countdown before the photo ----------------------------------------
 
 
@@ -231,6 +244,7 @@ def test_a_skipped_alert_never_passes_its_recordings_to_the_next_one(waiting, mo
     from telegram_alert import voice
     monkeypatch.setattr(voice, "to_voice", lambda wav: ("voice", b"ogg:" + wav))
     node, submitted = waiting
+    node.recording_dir = str(tmp_path)
     path = tmp_path / "1.wav"
     path.write_bytes(b"wav1")
     node.on_robot_state(SimpleNamespace(data="WAIT_OPERATOR"))
