@@ -17,8 +17,9 @@ avoidance_node:
     min_range: 0.02             # closer than this = glitch, dropped (m)
     max_range: 4.0              # farther / inf = nothing near (m)
 
-    stop_distance: 0.30         # blocked at or below this (m)
-    clear_distance: 0.40        # clear again at or above this (m)
+    stop_distance: 0.40         # blocked at or below this (m from the LiDAR, about 25 cm
+                                # from the M1's bumper: the LiDAR sits 15 cm behind it)
+    clear_distance: 0.50        # clear again at or above this (m)
     sensor_timeout: 0.5         # no reading this long -> blocked, turn fails (s)
 
     # How AVOID turns away (D6, D13). The M1 has mecanum wheels, so it turns

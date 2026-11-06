@@ -54,16 +54,17 @@ machine, launch with `cmd_vel_topic:=/cmd_vel`.
   are skipped.
 - **Filter:** median of the last 5 readings. NaN and readings under 2 cm
   get dropped. `inf` and anything past 4 m count as 4 m.
-- **Threshold with hysteresis:** blocked at 0.30 m or closer, clear again
-  only at 0.40 m or farther. A reading that hovers around 0.30 m does not
-  toggle the state.
+- **Threshold with hysteresis:** blocked at 0.40 m or closer, clear again
+  only at 0.50 m or farther (from the LiDAR, which sits about 15 cm behind
+  the M1's bumper). A reading that hovers around 0.40 m does not toggle the
+  state.
 - **Turn:** purin checked our M1: it has mecanum wheels and turns in
   place. The node turns at 1 rad/s. Done once the corridor ahead has stayed
-  clear (0.40 m) for 0.3 s and the robot has turned at least 30 degrees.
+  clear (0.50 m) for 0.3 s and the robot has turned at least 30 degrees.
   After 270 degrees it reports `failed`.
 
   Mecanum wheels slip when they turn in place, so the turned angle comes
-  from the IMU gyro (`/imu/data_raw`). With no IMU, or after 0.2 s with no
+  from the IMU gyro (`/imu/data_raw`). With no IMU, or after 0.3 s with no
   gyro reading, it is speed x time. Speed x time also caps the turn: a
   robot that doesn't turn still reports `failed` after 4.7 s.
 - **Sensor silent for 0.5 s:** `/obstacle/detected` stays `True` until
@@ -72,12 +73,12 @@ machine, launch with `cmd_vel_topic:=/cmd_vel`.
 - **Turn time:** the state machine cancels a turn after 10 s with no result.
   The longest turn (270 degrees at 1 rad/s) takes 4.7 s.
 - **Stopping distance:** the robot keeps moving for up to about 0.45 s after
-  an obstacle comes within 0.30 m: up to 0.1 s to the next scan, about 0.2 s
+  an obstacle comes within 0.40 m: up to 0.1 s to the next scan, about 0.2 s
   while the median of 5 catches up, up to 0.1 s to the next
   `/obstacle/detected`, then the state machine and the brakes. At 0.3 m/s
-  the 0.45 s is about 13 cm, so the robot stops about 0.17 m from the
-  LiDAR, minus the LiDAR-to-bumper gap. Keep `linear_speed` at 0.3 m/s or
-  below until bring-up measures it.
+  the 0.45 s is about 13 cm, so the robot stops about 0.27 m from the
+  LiDAR, about 12 cm from the bumper. At the default 0.2 m/s it is about
+  9 cm. Keep `linear_speed` at 0.3 m/s or below.
 
   CoppeliaSim agrees (`tools/sim_avoidance.py --speed S --react 0.2`, the
   0.2 s standing in for the heartbeat and the state machine's tick). The lab
@@ -167,10 +168,10 @@ The topic contract lives in `docs/interfaces.md` (D5 for this package).
 ## Open questions
 
 1. LiDAR or ultrasonic? D19 says LiDAR if the M1 has one; confirmed at bring-up
-2. Stop and clear distances: 0.30 / 0.40 m from the LiDAR. On the M1 the
-   LiDAR is about level with the front bumper (wall test), so the robot
-   stops about 0.30 m from the bumper, less what it rolls. It stopped
-   before a box on the robot; the gap left is still to measure.
+2. Stop and clear distances: 0.40 / 0.50 m from the LiDAR. On the M1 the
+   LiDAR sits about 15 cm behind the front bumper (purin, taped on 6 Nov),
+   so the robot stops about 25 cm from the bumper, less what it rolls. With
+   the old 0.30 it stopped about 15 cm from the bumper at 0.2 m/s.
 
 ## Limitations
 

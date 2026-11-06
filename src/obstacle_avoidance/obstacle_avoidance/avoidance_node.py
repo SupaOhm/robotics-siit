@@ -52,8 +52,8 @@ class AvoidanceNode(Node):
         p("filter_window", 5)
         p("min_range", 0.02)
         p("max_range", 4.0)
-        p("stop_distance", 0.30)
-        p("clear_distance", 0.40)
+        p("stop_distance", 0.40)
+        p("clear_distance", 0.50)
         p("sensor_timeout", 0.5)
         p("imu_topic", "/imu/data_raw")  # "" = estimate the turn as speed x time
         p("imu_timeout", 0.3)
