@@ -24,4 +24,4 @@ state_machine:
 
 camera_tilt:
   ros__parameters:
-    pan: 90                   # Yahboom s1, camera facing forward
+    pan: 65                   # Yahboom s1: faces forward on our M1 (90 points ~45 deg left, 6 Nov)
