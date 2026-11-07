@@ -105,7 +105,7 @@ and the direction from ±90° to the sides; ultrasonic sees the front only.
 
 | Topic | Type | From → To | Meaning |
 |---|---|---|---|
-| `/camera/image_raw` | `sensor_msgs/Image` | camera driver → detector, telegram | Onboard camera (D21). Real topic name confirmed at bring-up |
+| `/camera/image_raw` | `sensor_msgs/Image` | camera driver → detector, telegram | Onboard camera (D21). On the robot (5 Nov): USB webcam, 640x480, `yuv422_yuy2`, 8 to 10 Hz (about 15 Hz after a second reboot), from `usb_cam` on `/dev/video0` |
 | `/detect/request` | `std_msgs/String` | state_machine → detector_node | Request id. Classify what is in front now (D7) |
 | `/detect/result` | `std_msgs/String` (JSON) | detector_node → state_machine | At most one reply per request, with the same `id`; none if there's no camera frame or YOLO fails (D8) |
 
@@ -251,7 +251,5 @@ DRIVE ─obstacle appears─► CLASSIFY ─object / unknown─► ANNOUNCE ─�
 
 | Question | Owner |
 |---|---|
-| Real camera topic name and the sensor fitted (bring-up, D19, D21) | Lane 1 |
 | Detector confidence threshold for `person` | Lane 2 |
-| Time limit per YOLO frame on the robot before it moves to the laptop (D18). Must fit the 3 s `CLASSIFY` timeout plus one retry | Lane 5 |
 | Password length and the password itself (kept out of the repo) | Lane 4 |
