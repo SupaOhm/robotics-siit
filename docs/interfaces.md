@@ -78,7 +78,7 @@ mecanum wheels, so `AVOID` turns in place.
 
 | Topic | Type | From → To | Meaning |
 |---|---|---|---|
-| `/obstacle/detected` | `std_msgs/Bool` | avoidance_node → state_machine | Published at a fixed **10 Hz**. `true` while blocked (0.30 m stop, 0.40 m clear), `true` from start-up until the first valid reading, and `true` while the sensor has given no valid reading for `sensor_timeout` |
+| `/obstacle/detected` | `std_msgs/Bool` | avoidance_node → state_machine | Published at a fixed **10 Hz**. `true` while blocked (0.40 m stop, 0.50 m clear, from the LiDAR), `true` from start-up until the first valid reading, and `true` while the sensor has given no valid reading for `sensor_timeout` |
 | `/obstacle/distance` | `std_msgs/Float32` | avoidance_node → anyone | Filtered front distance (m) |
 | `/avoidance/start` | `std_msgs/Empty` | state_machine → avoidance_node | Turn away from what is in front |
 | `/avoidance/cancel` | `std_msgs/Empty` | state_machine → avoidance_node | Stop turning |
@@ -96,7 +96,7 @@ A sensor that fails while the node is running is different: the topic goes
 
 **How `AVOID` turns.** In place at 1 rad/s, toward the side with more room
 (ultrasonic has no side readings, so it turns left). It is done once a
-corridor ahead as wide as the robot (±0.20 m) has stayed clear to 0.40 m for
+corridor ahead as wide as the robot (±0.20 m) has stayed clear to 0.50 m for
 0.3 s and the robot has turned at least 30°. Past 270°, or 4.7 s of turning,
 it reports `failed`. The LiDAR decides blocked and clear from that corridor
 and the direction from ±90° to the sides; ultrasonic sees the front only.
