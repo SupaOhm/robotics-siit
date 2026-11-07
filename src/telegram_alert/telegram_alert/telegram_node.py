@@ -33,6 +33,7 @@ from std_msgs.msg import String
 
 from . import voice
 from .bot import AlertBot
+from .recording_path import safe_recording_path
 from .settings import load_settings
 
 MAX_PENDING = 10  # messages kept while the bot is still connecting
@@ -58,6 +59,7 @@ class TelegramNode(Node):
         p("operator_timeout", 40)  # the state machine's WAIT_OPERATOR timeout (text only)
         p("photo_delay", 10.5)  # /telegram/alert to photo: password_denied + countdown clip
         p("retake_delay", 7.0)  # Retake press to photo: the countdown clip
+        p("recording_dir", "/tmp/password_attempts")  # same as password_node: the only place recordings are read from
         p("env_file", "")  # optional .env with TELEGRAM_* (gitignored)
 
         g = lambda name: self.get_parameter(name).value
@@ -66,6 +68,7 @@ class TelegramNode(Node):
         self.max_image_age = float(g("max_image_age"))
         self.photo_delay = float(g("photo_delay"))
         self.retake_delay = float(g("retake_delay"))
+        self.recording_dir = g("recording_dir")
 
         self._last_image = None  # (serialized Image bytes, monotonic time received)
         self._robot_state = None
@@ -104,6 +107,10 @@ class TelegramNode(Node):
             path, heard = rec["path"], str(rec.get("heard", ""))
         except (ValueError, KeyError, TypeError):
             self.get_logger().warning("bad /password/recording ignored")
+            return
+        path = safe_recording_path(path, self.recording_dir)
+        if path is None:
+            self.get_logger().warning("/password/recording outside %s ignored" % self.recording_dir)
             return
         self._recordings.append((path, heard))
         del self._recordings[:-MAX_RECORDINGS]

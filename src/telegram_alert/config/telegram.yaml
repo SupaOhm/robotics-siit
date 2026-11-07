@@ -11,3 +11,4 @@ telegram_node:
                                        # (3.3 s) + photo_countdown (6.1 s) + a margin
     retake_delay: 7.0                  # seconds from a Retake press to the photo: photo_countdown
                                        # (6.1 s) + a margin
+    recording_dir: "/tmp/password_attempts"  # must match password_node: recordings outside it are ignored
