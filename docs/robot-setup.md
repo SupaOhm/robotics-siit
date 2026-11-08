@@ -21,12 +21,24 @@ the blanks as you go. Other lanes read the results from here.
         now 42, with `ROS_LOCALHOST_ONLY=0`, CycloneDDS and the workspace
         `install/setup.bash` added
       - Both edits live in the container. They survive a restart, not a
-        re-created container
+        re-created container. On 5 Nov every Pi boot made a new container
+        from the stock image (domain 61, no Telegram library, Vosk model,
+        password hash or LiDAR link): the desktop autostart
+        (`~/.config/autostart/start_handle.desktop`) runs
+        `~/Rosmaster/rosmaster/start_ros2_humble.sh`, which did `docker run`.
+        Since 6 Nov that script runs `docker start -ai eager_pascal` instead;
+        the original is `start_ros2_humble.sh.bak` next to it (#40)
+      - If ROS comes up on domain 61, check `docker ps` on the Pi, then
+        `docker stop <that container>` and `docker start eager_pascal`
       - `/home/pi/share` on the Pi is `/root/share` in the container
-      - The container has no `/dev/rplidar` (the LiDAR is `/dev/ttyUSB0`).
-        Start the LiDAR with `ln -sf /dev/ttyUSB0 /dev/rplidar` then
-        `ros2 launch ydlidar_ros2_driver ydlidar_launch.py`. The link goes
-        when the container restarts
+      - The container has no `/dev/rplidar`. USB numbering can change
+        between boots: after the 5 Nov 17:17 boot the motor board was
+        `/dev/ttyUSB0` (`/dev/myserial`) and the LiDAR `/dev/ttyUSB2`. On the
+        Pi, run `ls -l /dev/rplidar` to find the LiDAR's `ttyUSBn`. In the
+        container, `ln -sf /dev/ttyUSBn /dev/rplidar` with that number, then
+        `ros2 launch ydlidar_ros2_driver ydlidar_launch.py`. Never link it to
+        the motor board's port (`/dev/myserial`). The link goes when the
+        container restarts
 - [x] If Docker: container runs with `--network host` and has the mic,
       speaker and camera (`--device /dev/snd --device /dev/video0`): both
       visible in the container; sound card 2 (USB voice board) has capture
@@ -45,6 +57,10 @@ writes these lines and installs CycloneDDS; `bash tools/ros_env_setup.sh check`
 prints the line to post on the session issue. On a Mac, `tools/mac_ros_setup.sh`
 sets them in the `ros_env` conda environment.
 
+On WSL2, the default NAT networking keeps DDS discovery from reaching the
+robot. Set `networkingMode=mirrored` under `[wsl2]` in `%UserProfile%\.wslconfig`
+(Windows 11), then `wsl --shutdown`. Not tried on this team's laptops.
+
 ```bash
 source /opt/ros/humble/setup.bash
 export ROS_DOMAIN_ID=42
@@ -57,7 +73,7 @@ export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp   # sudo apt install ros-humble-rmw
 - [x] If discovery fails on this phone (some iPhones block multicast): try
       another phone, or fall back to Fast DDS with a discovery server. Not
       needed: discovery works with CycloneDDS
-- [ ] Gesture laptop OS (needs ROS 2 Humble: Ubuntu 22.04, WSL2, or Docker): `macOS on purin's M1 MacBook, ROS 2 Humble from RoboStack (tools/mac_ros_setup.sh)`
+- [x] Gesture laptop OS (needs ROS 2 Humble: Ubuntu 22.04, WSL2, or Docker): `macOS on purin's M1 MacBook, ROS 2 Humble from RoboStack (tools/mac_ros_setup.sh)`
 
 ## 3. Hardware
 
