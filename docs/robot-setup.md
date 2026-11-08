@@ -33,10 +33,14 @@ the blanks as you go. Other lanes read the results from here.
       - If ROS comes up on domain 61, check `docker ps` on the Pi, then
         `docker stop <that container>` and `docker start eager_pascal`
       - `/home/pi/share` on the Pi is `/root/share` in the container
-      - `docker exec eager_pascal bash -c "..."` doesn't read `/root/.bashrc`.
-        Start with `source /root/.bashrc`, or `camera_tilt` fails with
-        `No module named 'yahboomcar_msgs'` (Yahboom's workspaces are not
-        sourced)
+      - `docker exec eager_pascal bash -c "..."` doesn't get the setup in
+        `/root/.bashrc`, and sourcing it does nothing: it returns early in a
+        non-interactive shell. Source the workspaces yourself, in this order:
+        `/opt/ros/humble/setup.bash`,
+        `/root/yahboomcar_ros2_ws/software/library_ws/install/setup.bash`,
+        `/root/yahboomcar_ros2_ws/yahboomcar_ws/install/setup.bash`,
+        `/root/share/robotics-siit/install/setup.bash`. Without Yahboom's,
+        `camera_tilt` fails with `No module named 'yahboomcar_msgs'`
       - The container has no `/dev/rplidar`. USB numbering can change
         between boots: after the 5 Nov 17:17 boot the motor board was
         `/dev/ttyUSB0` (`/dev/myserial`) and the LiDAR `/dev/ttyUSB2`; after
