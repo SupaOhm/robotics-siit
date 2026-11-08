@@ -27,13 +27,20 @@ the blanks as you go. Other lanes read the results from here.
         (`~/.config/autostart/start_handle.desktop`) runs
         `~/Rosmaster/rosmaster/start_ros2_humble.sh`, which did `docker run`.
         Since 6 Nov that script runs `docker start -ai eager_pascal` instead;
-        the original is `start_ros2_humble.sh.bak` next to it (#40)
+        the original is `start_ros2_humble.sh.bak` next to it (#40).
+        Checked 8 Nov: after power-on, `eager_pascal` came up on domain 42
+        and no new container was made
       - If ROS comes up on domain 61, check `docker ps` on the Pi, then
         `docker stop <that container>` and `docker start eager_pascal`
       - `/home/pi/share` on the Pi is `/root/share` in the container
+      - `docker exec eager_pascal bash -c "..."` doesn't read `/root/.bashrc`.
+        Start with `source /root/.bashrc`, or `camera_tilt` fails with
+        `No module named 'yahboomcar_msgs'` (Yahboom's workspaces are not
+        sourced)
       - The container has no `/dev/rplidar`. USB numbering can change
         between boots: after the 5 Nov 17:17 boot the motor board was
-        `/dev/ttyUSB0` (`/dev/myserial`) and the LiDAR `/dev/ttyUSB2`. On the
+        `/dev/ttyUSB0` (`/dev/myserial`) and the LiDAR `/dev/ttyUSB2`; after
+        the 8 Nov boot the LiDAR was `ttyUSB0` and the motor board `ttyUSB1`. On the
         Pi, run `ls -l /dev/rplidar` to find the LiDAR's `ttyUSBn`. In the
         container, `ln -sf /dev/ttyUSBn /dev/rplidar` with that number, then
         `ros2 launch ydlidar_ros2_driver ydlidar_launch.py`. Never link it to
@@ -91,7 +98,7 @@ state machine first: the script sends its own turn on `/cmd_vel`.
 | Distance sensor (D19) | LiDAR fitted? Model, topic (`/scan`?), rate, which way 0° points, QoS (`ros2 topic info -v /scan`). Else ultrasonic topic | `YDLIDAR T-mini on /scan, 10 Hz, 404 beams over 360°, BEST_EFFORT. 0° points backward (a wall in front of the camera reads at 180°), so front_angle_deg: 180.0` |
 | Low objects (Lanes 2, 3) | Height of the LiDAR beam above the floor. Anything lower never stops the robot, so it is never named. Once `obstacle_avoidance` runs (§4), put a cup, then a bottle, 0.3 m in front of the bumper: `ros2 topic echo /obstacle/distance` should read about 0.3 plus the LiDAR-to-bumper gap | Beam about 16 cm above the floor (Yahboom drawing: LiDAR top at 181.4 mm). A cup 0.3 m ahead: not seen. A clear Crystal bottle 0.3 m ahead: the beam went through it (read 0.60 m) |
 | Size (Lane 3) | Robot width (`corridor_half_width` is half of it plus a margin) and the gap from the LiDAR to the front bumper | Yahboom drawing: 231.4 mm wide, 284.4 mm long, LiDAR about 15 cm behind the front bumper (purin, taped on 6 Nov, #40) |
-| Stopping distance (Lane 3) | Once the state machine runs, drive at `linear_speed` toward a box and measure the gap left in front of the bumper. The robot keeps moving for up to about 0.45 s after the box comes within `stop_distance` (0.40 m from the LiDAR): about 9 cm at 0.2 m/s | `With the old 0.30: stopped about 30 cm from the LiDAR at 0.2 m/s, so about 15 cm from the bumper, by eye (purin, 6 Nov). stop_distance is now 0.40, about 25 cm from the bumper` |
+| Stopping distance (Lane 3) | Once the state machine runs, drive at `linear_speed` toward a box and measure the gap left in front of the bumper. The robot keeps moving for up to about 0.45 s after the box comes within `stop_distance` (0.40 m from the LiDAR): about 9 cm at 0.2 m/s | `At stop_distance 0.40: stops at 0.40 m from the LiDAR, about 25 cm from the bumper, as set (purin, 8 Nov). The LiDAR is 15 cm behind the bumper, so subtract 0.15 m from any LiDAR distance to get the gap in front of the bumper. With the old 0.30 (6 Nov): about 15 cm from the bumper` |
 | Microphone (D22) | `arecord -l` lists the USB mic; `arecord -d 3 t.wav && aplay t.wav` is clear | Sound card 2 (USB voice board); recording works. Set capture to 40% (`amixer -c 2 sset Mic capture 40%`): 100% (+23 dB) clipped. Open at 48 kHz (`mic_sample_rate: 48000`): at 44.1 kHz it delivers about 24,300 samples/s. 5 Nov at 40%: peak -0.2 to -7.3 dBFS, 0.00% clipped, room noise 110 to 210 ([mic-check-results-nov5.md](mic-check-results-nov5.md)) |
 | Voice module | Free speech, or fixed command words only? | Used only as the mic and speaker (sound card 2). Vosk does the recognition: digits-only grammar for the check, free speech for the Telegram caption only (D24). Vosk streaming heard 10/10 digits (D34) |
 | Speaker (D25) | `aplay` a test `.wav` is loud enough at 2 m | `____` |
