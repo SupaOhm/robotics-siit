@@ -16,8 +16,7 @@ to paste there:
 3. a cup, then a bottle, 0.3 m in front of the bumper: does the beam see them?
 4. a 2 s turn in place at +0.5 rad/s: does the IMU read about +0.5 rad/s?
 
---no-objects skips 2 and 3, --no-turn skips 4. Robot width and the
-LiDAR-to-bumper gap still need a tape measure.
+--no-objects skips 2 and 3, --no-turn skips 4.
 """
 
 import argparse
@@ -311,8 +310,8 @@ def main():
     parser.add_argument("--scan-topic", default="/scan")
     parser.add_argument("--imu-topic", default="/imu/data_raw")
     parser.add_argument("--cmd-vel-topic", default="/cmd_vel")
-    parser.add_argument("--bumper-gap", type=float, default=0.0,
-                        help="m from the LiDAR to the front bumper (about 0 on the M1, wall test)")
+    parser.add_argument("--bumper-gap", type=float, default=0.15,
+                        help="m from the LiDAR to the front bumper (about 0.15 on the M1, taped)")
     parser.add_argument("--no-objects", action="store_true", help="skip the box, cup and bottle")
     parser.add_argument("--no-turn", action="store_true", help="skip the turn (publishes /cmd_vel)")
     parser.add_argument("--force", action="store_true", help="turn even if something else publishes /cmd_vel")

@@ -101,7 +101,7 @@ people with a password.
 | Risk | Mitigation |
 |---|---|
 | YOLO is too slow on the robot | Benchmark on the robot (Lane 5); run YOLO only when the robot stops (D7); move it to the laptop over the hotspot if needed (D18) |
-| The robot is low, so at 0.30 m the camera may only see feet and a person could skip the password | Floor-level photo test (ohm); if people are missed, add a tilted frame in `CLASSIFY` |
+| The robot is low, so where it stops (0.40 m from the LiDAR, about 25 cm from the bumper) the camera may only see feet and a person could skip the password | Floor-level photo test (ohm); if people are missed, add a tilted frame in `CLASSIFY` |
 | Low light hurts gesture and object recognition | Test in demo lighting early (Lane 5) |
 | The LiDAR beam is about 16 cm above the floor (Yahboom's M1 drawing), so a cup, or a laptop on the floor, never stops the robot and is never named. Clear plastic doesn't reflect it: on the robot the beam went through a Crystal bottle | Use objects taller than 16 cm in the demo; `tools/lane3_bringup_check.py` tests a cup and a bottle |
 | YOLO doesn't know walls, doors, boxes | They fall back to "Found an obstacle" |
@@ -116,7 +116,7 @@ turns, are under "Still open" in [docs/interfaces.md](docs/interfaces.md).
 
 | Question | Owner |
 |---|---|
-| Is 0.30 m far enough for the camera to see a person? | ohm |
+| Is 0.40 m from the LiDAR (about 25 cm from the bumper) far enough for the camera to see a person? | ohm |
 | Which laptop runs `gesture_node`? Answer: purin's M1 MacBook, ROS 2 Humble from RoboStack (`tools/mac_ros_setup.sh`). Still to confirm: the link to the robot over the hotspot | purin |
 | What FPS counts as good enough for gesture control? Answer: at least 10 FPS, 15 FPS target ([docs/benchmark-yolo.md](docs/benchmark-yolo.md)). Still to measure on purin's Mac | Lane 5 |
 | What demo conditions do we test in: lighting, background noise, hotspot? | Lane 5 |
