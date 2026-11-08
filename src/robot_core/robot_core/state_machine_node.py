@@ -12,6 +12,7 @@ import rclpy
 from geometry_msgs.msg import Twist
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile
+from rclpy.signals import SignalHandlerOptions
 from std_msgs.msg import Bool, Empty, Int32, String
 
 from .machine import Settings, StateMachine
@@ -101,7 +102,8 @@ class StateMachineNode(Node):
 
 
 def main(args=None):
-    rclpy.init(args=args)
+    # Python handles Ctrl-C, so the context is still valid for the final stop.
+    rclpy.init(args=args, signal_handler_options=SignalHandlerOptions.NO)
     node = StateMachineNode()
     try:
         rclpy.spin(node)
