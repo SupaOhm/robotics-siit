@@ -8,21 +8,15 @@ one starts passing, remove its known_miss.
 
 import json
 import os
-import re
 
 import pytest
 
-from object_detection.classifier import Detection, classify, parse_name_table
+from object_detection.recorded import answer, read_settings
 
 HERE = os.path.dirname(__file__)
 
-# Use the robot's own settings, so tuning them re-checks the photos. CI has no
-# YAML library, so read the few lines needed directly.
-with open(os.path.join(HERE, "..", "config", "detector.yaml")) as f:
-    CONFIG = f.read()
-PERSON_THRESHOLD = float(re.search(r"person_threshold:\s*([\d.]+)", CONFIG)[1])
-OBJECT_THRESHOLD = float(re.search(r"object_threshold:\s*([\d.]+)", CONFIG)[1])
-NAMES = parse_name_table(re.findall(r'^\s*-\s*"([^"]+=[^"]+)"', CONFIG, re.M))
+# Use the robot's own settings, so tuning them re-checks the photos.
+SETTINGS = read_settings(os.path.join(HERE, "..", "config", "detector.yaml"))
 
 with open(os.path.join(HERE, "floor_photos.json")) as f:
     PHOTOS = json.load(f)
@@ -34,8 +28,4 @@ with open(os.path.join(HERE, "floor_photos.json")) as f:
     else pytest.param(p, id=p["photo"])
     for p in PHOTOS])
 def test_photo(photo):
-    detections = [Detection(name, conf, area)
-                  for name, conf, area in photo["boxes"]]
-    result = classify(photo["photo"], detections, NAMES,
-                      PERSON_THRESHOLD, OBJECT_THRESHOLD)
-    assert (result["label"] or result["kind"]) == photo["expect"]
+    assert answer(photo["boxes"], SETTINGS) == photo["expect"]

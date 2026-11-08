@@ -26,3 +26,6 @@ Thumbs.db
 *_ncnn_model/
 *.task
 .venv-gesture/
+
+# Local photos and robot recordings: they show people, keep them off GitHub
+/local/

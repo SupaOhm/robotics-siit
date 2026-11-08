@@ -16,8 +16,7 @@ to paste there:
 3. a cup, then a bottle, 0.3 m in front of the bumper: does the beam see them?
 4. a 2 s turn in place at +0.5 rad/s: does the IMU read about +0.5 rad/s?
 
---no-objects skips 2 and 3, --no-turn skips 4. Robot width and the
-LiDAR-to-bumper gap still need a tape measure.
+--no-objects skips 2 and 3, --no-turn skips 4.
 """
 
 import argparse
@@ -54,15 +53,20 @@ def judge_rate(name, hz, good, ok, why):
     return "FAIL", "%s at %.1f Hz, %s" % (name, hz, why)
 
 
-def closest_return(ranges, angle_min, angle_increment, max_dist=1.0, min_valid=0.02):
-    """(distance, angle in deg) of the closest valid return within max_dist,
-    or None. With one box in front, its angle is where 0 deg points."""
+def closest_return(ranges, angle_min, angle_increment, center_deg=0.0, half_width_deg=180.0,
+                   max_dist=1.0, min_valid=0.02):
+    """(distance, angle in deg) of the closest valid return within max_dist
+    and half_width_deg of center_deg, or None. With one box in front, its
+    angle is where the robot's front is."""
     best = None
     for i, r in enumerate(ranges):
         if math.isnan(r) or r < min_valid or r > max_dist:
             continue
+        a = angle_min + i * angle_increment
+        if abs(wrap(a - math.radians(center_deg))) > math.radians(half_width_deg):
+            continue
         if best is None or r < best[0]:
-            best = (r, math.degrees(wrap(angle_min + i * angle_increment)))
+            best = (r, math.degrees(wrap(a)))
     return best
 
 
@@ -72,18 +76,21 @@ def mean_angle(degrees):
     return math.degrees(math.atan2(sum(map(math.sin, rad)), sum(map(math.cos, rad))))
 
 
-def judge_front_angle(angle):
-    if abs(angle) <= 20:
-        return "PASS", "box seen at %+.0f deg: front_angle_deg 0.0 is right" % angle
-    if abs(angle) >= 160:
-        return "WARN", "box seen at %+.0f deg: set front_angle_deg: 180.0" % angle
-    return "WARN", "box seen at %+.0f deg: 0 deg doesn't point ahead; set front_angle_deg to about %.0f" % (angle, angle)
+def judge_front_angle(angle, configured):
+    off = math.degrees(wrap(math.radians(angle - configured)))
+    if abs(off) <= 20:
+        return "PASS", "box seen at %+.0f deg: front_angle_deg %.1f is right" % (angle, configured)
+    if abs(off) >= 160:
+        flipped = (configured + 180) % 360
+        flipped = flipped - 360 if flipped > 180 else flipped
+        return "WARN", "box seen at %+.0f deg, behind front_angle_deg %.1f: set it to %.1f" % (angle, configured, flipped)
+    return "WARN", "box seen at %+.0f deg: set front_angle_deg to about %.0f" % (angle, angle)
 
 
 def judge_low_object(name, front, expected):
     where = "%s 0.3 m from the bumper: the node reads %.2f m (expected about %.2f)" % (name, front, expected)
-    if front < expected - PLACE + 0.05:
-        return "WARN", where + ", closer than the bumper: the robot itself is in the way, so this can't tell"
+    if front < expected - 0.08:
+        return "WARN", where + ", closer than the object: something else is in front, so this can't tell"
     if front <= expected + 0.15:
         return "PASS", where
     if front <= expected + 0.3:
@@ -91,10 +98,13 @@ def judge_low_object(name, front, expected):
     return "FAIL", where + ", so it is below the beam or doesn't reflect, and never stops the robot"
 
 
-def judge_empty_front(front, bumper_gap):
-    if front < bumper_gap + 0.05:
-        return "FAIL", ("nothing in front, yet the node reads %.2f m: the LiDAR sees the robot itself "
-                        "(the camera mount?), so it stays blocked" % front)
+def judge_empty_front(front, stop_distance):
+    if front <= stop_distance:
+        return "FAIL", ("nothing in front, yet the node reads %.2f m (stops at %.2f): something is in "
+                        "the corridor, or the LiDAR sees the robot itself, so it stays blocked" % (front, stop_distance))
+    if front < 1.0:
+        return "WARN", ("nothing in front, yet the node reads %.2f m: clear 1 m ahead, or the cup "
+                        "and bottle checks read that instead" % front)
     return "PASS", "nothing in front: the node reads %.2f m" % front
 
 
@@ -116,8 +126,10 @@ def judge_imu(rates, commanded):
 def run(args):
     import rclpy
     from geometry_msgs.msg import Twist
+    from rclpy.executors import ExternalShutdownException
     from rclpy.node import Node
     from rclpy.qos import qos_profile_sensor_data
+    from rclpy.signals import SignalHandlerOptions
     from sensor_msgs.msg import Imu, LaserScan
 
     P = load_params(args.config)
@@ -131,10 +143,13 @@ def run(args):
     class Probe(Node):
         def __init__(self):
             super().__init__("lane3_bringup_check")
-            self.scans, self.imus = [], []
+            self.scans, self.imus, self.cmds = [], [], []
             self.create_subscription(LaserScan, args.scan_topic, self.on_scan, qos_profile_sensor_data)
             self.create_subscription(Imu, args.imu_topic, self.on_imu, qos_profile_sensor_data)
             self.cmd_pub = self.create_publisher(Twist, args.cmd_vel_topic, 10)
+            # Someone else streaming /cmd_vel (a running state_machine) overrides the turn
+            self.create_subscription(Twist, args.cmd_vel_topic,
+                                     lambda _: self.cmds.append(time.monotonic()), 10)
 
         def on_scan(self, msg):
             self.scans.append((time.monotonic(), msg))
@@ -154,9 +169,18 @@ def run(args):
             infos = self.get_publishers_info_by_topic(topic)
             return ", ".join(sorted({i.qos_profile.reliability.name for i in infos})) or "no publisher"
 
-    rclpy.init()
+    # No rclpy signal handler: Ctrl+C must reach the finally below while the
+    # context still works, so the robot gets its stop command
+    rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
     node = Probe()
-    threading.Thread(target=rclpy.spin, args=(node,), daemon=True).start()
+
+    def spin():
+        try:
+            rclpy.spin(node)
+        except ExternalShutdownException:
+            pass  # rclpy.shutdown() at the end ends the spin
+
+    threading.Thread(target=spin, daemon=True).start()
 
     def front_reading(seconds=1.0):
         """Median of what obstacle_avoidance's corridor would read."""
@@ -195,8 +219,8 @@ def run(args):
         else:
             report("FAIL", "%s: nothing in 3 s (ros2 topic list, ROS_DOMAIN_ID)" % args.scan_topic)
         if imus:
-            report(*judge_rate(args.imu_topic, len(imus) / 3.0, 10, 5,
-                               "imu_timeout is 0.2 s, so the yaw keeps dropping out"))
+            report(*judge_rate(args.imu_topic, len(imus) / 3.0, 8, 4,
+                               "imu_timeout is %.1f s, so the yaw keeps dropping out" % P["imu_timeout"]))
             report("INFO", "%s: QoS %s" % (args.imu_topic, node.reliability(args.imu_topic)))
         else:
             report("FAIL", "%s: nothing in 3 s; set imu_topic, or \"\" to count speed x time" % args.imu_topic)
@@ -207,15 +231,20 @@ def run(args):
             if ask("Put a box 0.3 m straight ahead of the front bumper, nothing else within 1 m"):
                 t0 = time.monotonic()
                 time.sleep(1.0)
-                # Returns closer than the bumper are the robot itself, not the box
-                hits = [closest_return(s.ranges, s.angle_min, s.angle_increment,
-                                       max_dist=expected + 0.5,
-                                       min_valid=max(s.range_min, P["min_range"], args.bumper_gap - 0.05))
-                        for s in node.since(node.scans, t0)]
-                hits = [h for h in hits if h]
+                scans = node.since(node.scans, t0)
+
+                def look(center):
+                    # Only near the front (or straight behind): things beside the robot aren't the box
+                    hits = [closest_return(s.ranges, s.angle_min, s.angle_increment, center, 45,
+                                           max_dist=expected + 0.5,
+                                           min_valid=max(s.range_min, P["min_range"]))
+                            for s in scans]
+                    return [h for h in hits if h]
+
+                hits = look(front_deg[0]) or look(front_deg[0] + 180)
                 if hits:
                     angle = mean_angle(a for _, a in hits)
-                    report(*judge_front_angle(angle))
+                    report(*judge_front_angle(angle, front_deg[0]))
                     if abs(wrap(math.radians(angle - front_deg[0]))) > math.radians(20):
                         front_deg[0] = round(angle)
                         report("INFO", "the next checks look along %+d deg, where the box was" % front_deg[0])
@@ -229,7 +258,7 @@ def run(args):
             if ask("Take the box away: nothing within 1 m of the front bumper"):
                 front = front_reading()
                 if front is not None:
-                    report(*judge_empty_front(front, args.bumper_gap))
+                    report(*judge_empty_front(front, P["stop_distance"]))
             print("3. Low objects", flush=True)
             for name in ("cup", "bottle"):
                 if ask("Put a %s on the floor 0.3 m straight ahead of the bumper, nothing else in front" % name):
@@ -241,10 +270,12 @@ def run(args):
 
         if not args.no_turn:
             print("4. Turn in place", flush=True)
-            others = len(node.get_publishers_info_by_topic(args.cmd_vel_topic)) - 1
-            if others > 0 and not args.force:
-                report("SKIP", "turn: %d other publisher(s) on %s; stop the state machine, or use --force"
-                       % (others, args.cmd_vel_topic))
+            t0 = time.monotonic()
+            time.sleep(1.0)
+            busy = sum(1 for t in node.cmds if t >= t0)
+            if busy >= 3 and not args.force:
+                report("SKIP", "turn: something else sends %s at about %d Hz (a running state_machine?) "
+                       "and would override the turn; stop it, or use --force" % (args.cmd_vel_topic, busy))
             elif not imus:
                 report("SKIP", "turn: no IMU to read")
             elif ask("The robot turns left on the spot for %.0f s. Clear 0.5 m around it" % TURN_TIME):
@@ -257,8 +288,12 @@ def run(args):
                     time.sleep(0.05)
                 rates = [z for t, z in node.imus if t0 + SETTLE <= t <= t0 + TURN_TIME]
                 report(*judge_imu(rates, TURN_SPEED))
+    except KeyboardInterrupt:
+        report("SKIP", "stopped with Ctrl+C")
     finally:
-        node.send(0.0)
+        for _ in range(3):
+            node.send(0.0)
+            time.sleep(0.05)
         node.destroy_node()
         rclpy.shutdown()
 
@@ -275,8 +310,8 @@ def main():
     parser.add_argument("--scan-topic", default="/scan")
     parser.add_argument("--imu-topic", default="/imu/data_raw")
     parser.add_argument("--cmd-vel-topic", default="/cmd_vel")
-    parser.add_argument("--bumper-gap", type=float, default=0.0,
-                        help="m from the LiDAR to the front bumper (about 0 on the M1, wall test)")
+    parser.add_argument("--bumper-gap", type=float, default=0.15,
+                        help="m from the LiDAR to the front bumper (about 0.15 on the M1, taped)")
     parser.add_argument("--no-objects", action="store_true", help="skip the box, cup and bottle")
     parser.add_argument("--no-turn", action="store_true", help="skip the turn (publishes /cmd_vel)")
     parser.add_argument("--force", action="store_true", help="turn even if something else publishes /cmd_vel")

@@ -17,15 +17,16 @@ avoidance_node:
     min_range: 0.02             # closer than this = glitch, dropped (m)
     max_range: 4.0              # farther / inf = nothing near (m)
 
-    stop_distance: 0.30         # blocked at or below this (m)
-    clear_distance: 0.40        # clear again at or above this (m)
+    stop_distance: 0.40         # blocked at or below this (m from the LiDAR, about 25 cm
+                                # from the M1's bumper: the LiDAR sits 15 cm behind it)
+    clear_distance: 0.50        # clear again at or above this (m)
     sensor_timeout: 0.5         # no reading this long -> blocked, turn fails (s)
 
     # How AVOID turns away (D6, D13). The M1 has mecanum wheels, so it turns
     # in place. The state machine cancels AVOID after 10 s with no result, so
     # keep max_turn_deg / turn_speed (in rad) + clear_time well under 10 s.
     imu_topic: "/imu/data_raw"  # gyro for the turned angle; "" = estimate it as speed x time
-    imu_timeout: 0.2            # no gyro reading this long -> speed x time until it's back (s)
+    imu_timeout: 0.3            # no gyro reading this long -> speed x time until it's back (s)
     turn_speed: 1.0             # rad/s while turning in place
     min_turn_deg: 30.0
     max_turn_deg: 270.0         # turned this far with no clear front -> "failed"

@@ -8,13 +8,26 @@ per frame. It answers the Lane 5 row under "Still open" in
 
 ## Result on the robot
 
-| Model (YOLO11n, 320 px) | One YOLO frame: mean / p95 / slowest | FPS | CPU temperature |
-|---|---|---|---|
-| **NCNN** | **28 / 66 / 213 ms** | 29.3 | 52 → 56 °C |
-| PyTorch `.pt` | 149 / 161 / 169 ms | 6.7 | 52 → 53 °C |
+| Model (YOLO11n, 320 px) | One YOLO frame: mean / p95 / slowest | FPS | Compute FPS | CPU temperature |
+|---|---|---|---|---|
+| **NCNN** | **28 / 66 / 213 ms** | 29.3 | 36.3 | 52 → 56 °C |
+| PyTorch `.pt` | 149 / 161 / 169 ms | 6.7 | 6.7 | 52 → 53 °C |
 
 The camera alone gives 33 FPS at 320x240. Each run was 20 s (587 NCNN frames,
-135 `.pt` frames).
+135 `.pt` frames). FPS is end to end and Compute FPS is YOLO alone, so NCNN's
+FPS is limited by the camera and `.pt`'s by YOLO.
+
+How to read the times:
+
+- They wrap `model.predict` only: letterbox, inference and NMS. `cv_bridge`
+  and box parsing in `detector_node` come on top.
+- They are steady state: frames back to back after a 2 s warm-up. Under D7 the
+  detector runs one inference after the robot has stopped. ohm's runs of
+  `detector_node` on the robot (#27) replied in 0.13 to 0.27 s including the
+  wait for a frame, and in about 0.75 s for the first request (D18 in #33).
+- They used `conf` 0.4. `detector_node` keeps boxes above 0.25, so its NMS sees
+  a few more boxes. The script now defaults to 0.25, and ohm's numbers come
+  from the real detector.
 
 Only the base driver in the boot container was running. The LiDAR, the camera
 node and our own nodes were not, so the robot will be busier in the demo. The
@@ -23,18 +36,39 @@ margin below covers that.
 ## Proposed decisions
 
 - **Time limit per YOLO frame on the robot: 1.0 s, slowest frame included.**
-  `CLASSIFY` waits 3 s and retries once. 1 s leaves room for waiting for the
-  next camera frame, `cv_bridge` and DDS. The robot's slowest NCNN frame
+  It has to fit the time budget below. The robot's slowest NCNN frame
   (213 ms) is under a quarter of the limit.
 - **YOLO stays on the robot (D18).** No need to move it to the laptop.
 - **Use the NCNN export (D20).** It is about 5 times faster than `.pt`. The
   detector's `detector.yaml` already points to it.
 - **Gesture control: at least 10 FPS, 15 FPS target.** With
-  `confirm_frames: 3`, a new word takes 0.3 s at 10 FPS and 0.2 s at 15 FPS
-  (`back`, at 6 frames: 0.6 s and 0.4 s). On a Windows laptop webcam,
-  MediaPipe hands takes about 20 ms per frame, about 50 FPS of compute, so the
-  camera is the limit: 30 FPS in good light, about 16 in a dim room. Still to
-  run on purin's Mac, which runs `gesture_node`.
+  `confirm_frames: 3`, a new word needs 3 frames, plus up to 0.1 s for
+  `gesture_node`'s 10 Hz publish timer (`publish_rate: 10`): 0.3 to 0.4 s at
+  10 FPS and 0.2 to 0.3 s at 15 FPS (`back`, at 6 frames: 0.6 to 0.7 s and
+  0.4 to 0.5 s). On a Windows laptop webcam, MediaPipe hands takes about 20 ms
+  per frame with this script, so the camera is the limit: 30 FPS in good
+  light, about 16 in a dim room. The script's MediaPipe settings and camera
+  capture differ from `gesture_node`'s, so purin is timing `gesture_node`
+  itself on his Mac.
+
+## Time budget for `CLASSIFY`
+
+`CLASSIFY` waits 3 s (`detect_timeout`) for `/detect/result`, then retries
+once with a new id. The parts of one reply have to fit:
+
+frame wait + YOLO + transport (`cv_bridge`, `classify`, DDS) ≤ 3 s
+
+| Part | Normal | Worst case |
+|---|---|---|
+| Frame wait: `detector_node` runs YOLO on the first camera frame after the request | one camera frame period | 2.0 to 2.5 s (`frame_timeout` 2.0 s, checked every 0.5 s), then no reply |
+| YOLO | 28 ms mean, 213 ms slowest (steady state) | the 1.0 s limit |
+| Transport | not measured on its own | |
+| Whole reply, measured on the robot (#27) | 0.13 to 0.27 s; about 0.75 s for the first request | |
+
+The worst case (a frame at 2.5 s and YOLO at the limit) passes 3 s. Nothing
+breaks: the state machine ignores the late reply because its id is old,
+retries, then goes to `CHECKPOINT`. With the camera running, a reply is far
+inside 3 s.
 
 ## Setup used
 
@@ -88,8 +122,12 @@ On the robot (find the container name with `docker ps`):
 docker exec <container> bash -ic 'cd /root/share && python3 bench_vision.py \
   --model yolo11n_ncnn_model --sizes 320x240 \
   --configs camera_only,yolo_only --seconds 20 --csv robot_ncnn.csv'
+docker exec <container> bash -ic 'cd /root/share && python3 bench_vision.py \
+  --model yolo11n.pt --sizes 320x240 \
+  --configs camera_only,yolo_only --seconds 20 --csv robot_pt.csv'
 ```
 
-The script prints PASS when the slowest YOLO frame is under
+The script uses imgsz 320 and conf 0.25 by default, as `detector_node` does.
+It prints PASS when the slowest YOLO frame is under
 `--yolo-limit-ms` (default 1000). `--fake` checks the script without a camera
 or a model. The model files are not in the repo (CONTRIBUTING.md).

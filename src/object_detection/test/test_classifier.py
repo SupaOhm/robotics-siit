@@ -64,8 +64,15 @@ def test_only_weak_boxes_is_unknown():
     assert result["kind"] == "unknown"
 
 
-def test_largest_box_not_in_table_is_unknown():
+def test_box_not_in_table_does_not_hide_a_named_object():
+    # Recording bottle_front: at floor level the floor reads as a larger
+    # "dining table", which would hide a clear bottle.
     result = run(Detection("couch", 0.9, 9000), Detection("chair", 0.9, 100))
+    assert result["label"] == "chair"
+
+
+def test_only_boxes_not_in_table_is_unknown():
+    result = run(Detection("couch", 0.9, 9000))
     assert result["kind"] == "unknown"
 
 
