@@ -15,8 +15,9 @@ the robot: a named object, a person, or an unknown obstacle.
 
 - YOLO runs on the first frame after a request.
 - Any `person` above `person_threshold` wins, whatever else is in frame.
-- Otherwise the largest box above `object_threshold` is named, if it is in the
-  name table. Weaker boxes are ignored.
+- Otherwise the largest box above `object_threshold` whose class is in the
+  name table is named. Weaker boxes and other classes are ignored, so the
+  floor read as a "dining table" can't hide a bottle.
 - Anything else is `unknown`, which plays `found_obstacle`.
 - With no camera frame, or if YOLO fails, there is no reply. The state machine
   retries, then goes to `CHECKPOINT`.
@@ -67,3 +68,6 @@ The rules are in plain Python, so the tests need no ROS or YOLO:
 ```bash
 python -m pytest test
 ```
+
+To check the rules against phone photos or robot recordings, see
+`tools/README.md`.
