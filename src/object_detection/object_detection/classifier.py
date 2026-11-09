@@ -4,10 +4,12 @@ No ROS or YOLO imports, so the rules can be tested on any laptop.
 
 Rules (docs/interfaces.md, D8):
   - Any person above the person threshold wins, whatever else is in frame.
-  - Otherwise name the largest box above the object threshold whose class is
-    in the name table, which is usually what blocks the robot. Weaker boxes
-    and classes not in the table are ignored, so a vague larger shape, or the
-    floor read as a "dining table", can't hide a clear bottle.
+  - Otherwise name the closest box above the object threshold whose class is
+    in the name table: the one whose bottom edge is lowest in the frame. The
+    camera looks along the floor, so that is what blocks the robot, not a
+    larger chair behind it. Weaker boxes and classes not in the table are
+    ignored, so a vague shape, or the floor read as a "dining table", can't
+    hide a clear bottle.
   - Anything else is an unknown obstacle.
 """
 
@@ -22,9 +24,8 @@ UNKNOWN_CLIP = "found_obstacle"
 class Detection:
     name: str           # YOLO class name, e.g. "dining table"
     confidence: float
-    area: float         # box area; only compared within one frame
     # x1, y1, x2, y2 as fractions of the frame's width and height, (0, 0) top left
-    box: Optional[Tuple[float, float, float, float]] = None
+    box: Tuple[float, float, float, float]
 
 
 def parse_name_table(entries: Iterable[str]) -> Dict[str, str]:
@@ -58,8 +59,8 @@ def classify(request_id: str, detections: Sequence[Detection],
              if d.name != PERSON and d.name in names
              and d.confidence >= object_threshold]
     if named:
-        largest = max(named, key=lambda d: d.area)
-        label = names[largest.name]
-        return _result(request_id, "object", label, largest.confidence,
+        closest = max(named, key=lambda d: d.box[3])
+        label = names[closest.name]
+        return _result(request_id, "object", label, closest.confidence,
                        "found_" + label)
     return _result(request_id, "unknown", None, 0.0, UNKNOWN_CLIP)

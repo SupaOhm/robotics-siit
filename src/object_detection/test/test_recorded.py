@@ -5,10 +5,11 @@ SETTINGS = {"person": 0.25, "object": 0.5,
 
 
 def test_saved_boxes_are_class_confidence_and_corners():
-    # Corners are fractions of the frame: x1, y1, x2, y2.
-    bottle = ["bottle", 0.9, 0.45, 0.5, 0.55, 0.9]   # 0.1 x 0.4 = 0.04
-    chair = ["chair", 0.8, 0.0, 0.0, 0.5, 0.5]       # 0.5 x 0.5 = 0.25
-    assert answer([bottle, chair], SETTINGS) == "chair"
+    # Corners are fractions of the frame: x1, y1, x2, y2. The bottle's
+    # bottom edge (0.9) is lower than the chair's (0.5), so it's closer.
+    bottle = ["bottle", 0.9, 0.45, 0.5, 0.55, 0.9]
+    chair = ["chair", 0.8, 0.0, 0.0, 0.5, 0.5]
+    assert answer([bottle, chair], SETTINGS) == "bottle"
 
 
 def test_boxes_below_both_thresholds_are_dropped():

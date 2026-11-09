@@ -1,5 +1,6 @@
 import pytest
 
+from object_detection.classifier import Detection
 from object_detection.yolo_backend import YoloDetector, resolve_model_path
 
 
@@ -79,6 +80,4 @@ def test_detection_has_the_box_as_fractions_of_the_frame():
     detector._model, detector._image_size, detector._confidence = (
         FakeModel(), 320, 0.25)
     [bottle] = detector.detect(None)
-    assert (bottle.name, bottle.confidence) == ("bottle", 0.9)
-    assert bottle.area == 64 * 240
-    assert bottle.box == (0.5, 0.5, 0.6, 1.0)
+    assert bottle == Detection("bottle", 0.9, (0.5, 0.5, 0.6, 1.0))

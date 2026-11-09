@@ -39,9 +39,7 @@ class YoloDetector:
                                      conf=self._confidence, verbose=False)[0]
         detections = []
         for box in result.boxes:
-            x1, y1, x2, y2 = box.xyxy[0].tolist()
             detections.append(Detection(result.names[int(box.cls[0])],
                                         float(box.conf[0]),
-                                        (x2 - x1) * (y2 - y1),
                                         tuple(box.xyxyn[0].tolist())))
         return detections

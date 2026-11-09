@@ -36,7 +36,7 @@ def answer(boxes: Sequence, settings: Dict) -> str:
     # The robot runs YOLO at the lower threshold, so it never sees weaker
     # boxes. The JSON keeps them only so the thresholds can be lowered.
     floor = min(settings["person"], settings["object"])
-    detections = [Detection(name, conf, (x2 - x1) * (y2 - y1), (x1, y1, x2, y2))
+    detections = [Detection(name, conf, (x1, y1, x2, y2))
                   for name, conf, x1, y1, x2, y2 in boxes if conf >= floor]
     result = classify("x", detections, settings["names"],
                       settings["person"], settings["object"])

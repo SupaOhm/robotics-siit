@@ -5,74 +5,88 @@ from object_detection.classifier import (Detection, classify, parse_name_table)
 NAMES = {"chair": "chair", "dining table": "table", "bottle": "bottle"}
 
 
+def box(name, confidence, bottom=0.9, left=0.4, right=0.6, top=0.5):
+    """A detection whose box ends `bottom` of the way down the frame. The
+    camera looks along the floor, so a lower bottom edge is closer."""
+    return Detection(name, confidence, (left, top, right, bottom))
+
+
 def run(*detections):
     return classify("d7", detections, NAMES, person_threshold=0.25,
                     object_threshold=0.5)
 
 
 def test_object_in_name_table():
-    assert run(Detection("chair", 0.82, 500)) == {
+    assert run(box("chair", 0.82)) == {
         "id": "d7", "kind": "object", "label": "chair", "confidence": 0.82,
         "clip": "found_chair"}
 
 
 def test_label_is_the_spoken_name_not_the_yolo_class():
-    result = run(Detection("dining table", 0.7, 500))
+    result = run(box("dining table", 0.7))
     assert result["label"] == "table"
     assert result["clip"] == "found_table"
 
 
 def test_person_result():
-    assert run(Detection("person", 0.91, 500)) == {
+    assert run(box("person", 0.91)) == {
         "id": "d7", "kind": "person", "label": "person", "confidence": 0.91,
         "clip": None}
 
 
-def test_person_wins_over_a_stronger_larger_object():
-    result = run(Detection("chair", 0.95, 9000), Detection("person", 0.3, 10))
+def test_person_wins_over_a_stronger_closer_object():
+    result = run(box("chair", 0.95, bottom=1.0),
+                 box("person", 0.3, bottom=0.5, left=0.9, right=1.0))
     assert result["kind"] == "person"
 
 
 def test_best_person_confidence_is_reported():
-    result = run(Detection("person", 0.3, 900), Detection("person", 0.8, 10))
+    result = run(box("person", 0.3), box("person", 0.8))
     assert result["confidence"] == 0.8
 
 
 def test_person_below_threshold_does_not_count():
-    result = run(Detection("person", 0.2, 500))
+    result = run(box("person", 0.2))
     assert result["kind"] == "unknown"
 
 
 def test_weak_person_does_not_hide_an_object():
-    result = run(Detection("person", 0.2, 9000), Detection("chair", 0.8, 500))
+    result = run(box("person", 0.2, bottom=1.0), box("chair", 0.8))
     assert result["label"] == "chair"
 
 
-def test_largest_box_is_named_not_the_most_confident():
-    result = run(Detection("chair", 0.6, 9000), Detection("bottle", 0.9, 100))
+def test_closest_box_is_named_not_the_largest():
+    # Photo bottle_5216: a bottle in front of a larger chair.
+    result = run(box("bottle", 0.91, bottom=0.97, left=0.31, right=0.52, top=0.30),
+                 box("chair", 0.69, bottom=0.82, left=0.39, right=0.87, top=0.01))
+    assert result["label"] == "bottle"
+
+
+def test_closest_box_is_named_not_the_most_confident():
+    result = run(box("chair", 0.6, bottom=0.95), box("bottle", 0.9, bottom=0.6))
     assert result["label"] == "chair"
 
 
-def test_weak_larger_box_does_not_hide_a_confident_object():
+def test_weak_closer_box_does_not_hide_a_confident_object():
     # Photo IMG_5044: a confident bottle in front of a weak office chair.
-    result = run(Detection("chair", 0.44, 9000), Detection("bottle", 0.83, 100))
+    result = run(box("chair", 0.44, bottom=0.95), box("bottle", 0.83, bottom=0.8))
     assert result["label"] == "bottle"
 
 
 def test_only_weak_boxes_is_unknown():
-    result = run(Detection("chair", 0.4, 9000), Detection("bottle", 0.3, 100))
+    result = run(box("chair", 0.4), box("bottle", 0.3))
     assert result["kind"] == "unknown"
 
 
 def test_box_not_in_table_does_not_hide_a_named_object():
-    # Recording bottle_front: at floor level the floor reads as a larger
+    # Recording bottle_front: at floor level the floor reads as a closer
     # "dining table", which would hide a clear bottle.
-    result = run(Detection("couch", 0.9, 9000), Detection("chair", 0.9, 100))
+    result = run(box("couch", 0.9, bottom=1.0), box("chair", 0.9, bottom=0.7))
     assert result["label"] == "chair"
 
 
 def test_only_boxes_not_in_table_is_unknown():
-    result = run(Detection("couch", 0.9, 9000))
+    result = run(box("couch", 0.9))
     assert result["kind"] == "unknown"
 
 
@@ -82,8 +96,8 @@ def test_nothing_detected_is_unknown():
 
 
 def test_threshold_is_inclusive():
-    assert run(Detection("chair", 0.5, 500))["kind"] == "object"
-    assert run(Detection("person", 0.25, 500))["kind"] == "person"
+    assert run(box("chair", 0.5))["kind"] == "object"
+    assert run(box("person", 0.25))["kind"] == "person"
 
 
 def test_parse_name_table():
