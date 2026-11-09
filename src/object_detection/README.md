@@ -14,7 +14,10 @@ the robot: a named object, a person, or an unknown obstacle.
 ## Rules
 
 - YOLO runs on the first frame after a request.
-- Any `person` above `person_threshold` wins, whatever else is in frame.
+- Any `person` above `person_threshold` wins, whatever else is in frame, if
+  their box reaches `person_min_bottom` of the way down the frame. A person
+  close enough to block the robot reaches the bottom edge; people further
+  back end higher up. The default, 0, counts every person.
 - Otherwise the closest box above `object_threshold` whose class is in the
   name table is named: the one whose bottom edge is lowest in the frame, so a
   bottle in front of a larger chair is named, not the chair. Weaker boxes and

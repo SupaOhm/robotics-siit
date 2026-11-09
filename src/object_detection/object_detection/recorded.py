@@ -21,6 +21,8 @@ def read_settings(path: str) -> Dict:
         "image_size": int(re.search(r"image_size:\s*(\d+)", text)[1]),
         "person": float(re.search(r"person_threshold:\s*([\d.]+)", text)[1]),
         "object": float(re.search(r"object_threshold:\s*([\d.]+)", text)[1]),
+        "person_min_bottom": float(
+            re.search(r"person_min_bottom:\s*([\d.]+)", text)[1]),
         "names": parse_name_table(
             re.findall(r'^\s*-\s*"([^"]+=[^"]+)"', text, re.M)),
     }
@@ -39,7 +41,8 @@ def answer(boxes: Sequence, settings: Dict) -> str:
     detections = [Detection(name, conf, (x1, y1, x2, y2))
                   for name, conf, x1, y1, x2, y2 in boxes if conf >= floor]
     result = classify("x", detections, settings["names"],
-                      settings["person"], settings["object"])
+                      settings["person"], settings["object"],
+                      settings["person_min_bottom"])
     return result["label"] or result["kind"]
 
 

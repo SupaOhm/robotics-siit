@@ -32,6 +32,7 @@ class DetectorNode(Node):
         p("image_size", 320)
         p("person_threshold", 0.25)
         p("object_threshold", 0.5)
+        p("person_min_bottom", 0.0)
         p("name_table", ["bottle=bottle", "backpack=backpack", "laptop=laptop",
                           "cup=cup"])
         p("image_topic", "/camera/image_raw")
@@ -40,6 +41,7 @@ class DetectorNode(Node):
         g = lambda name: self.get_parameter(name).value
         self.person_threshold = float(g("person_threshold"))
         self.object_threshold = float(g("object_threshold"))
+        self.person_min_bottom = float(g("person_min_bottom"))
         self.names = parse_name_table(g("name_table"))
         self.frame_timeout = float(g("frame_timeout"))
         self.detector = YoloDetector(
@@ -89,7 +91,8 @@ class DetectorNode(Node):
             self.get_logger().error("request %s failed: %s" % (request_id, error))
             return
         result = classify(request_id, detections, self.names,
-                          self.person_threshold, self.object_threshold)
+                          self.person_threshold, self.object_threshold,
+                          self.person_min_bottom)
         self.result_pub.publish(String(data=json.dumps(result)))
         self.get_logger().info("result: %s" % json.dumps(result))
 

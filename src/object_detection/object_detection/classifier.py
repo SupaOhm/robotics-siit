@@ -3,7 +3,11 @@
 No ROS or YOLO imports, so the rules can be tested on any laptop.
 
 Rules (docs/interfaces.md, D8):
-  - Any person above the person threshold wins, whatever else is in frame.
+  - Any person above the person threshold wins, whatever else is in frame,
+    if their box reaches at least person_min_bottom of the way down the
+    frame. A person close enough to block the robot reaches the bottom edge,
+    wherever they stand across the frame; one further back ends higher up.
+    person_min_bottom 0 (the default) counts every person.
   - Otherwise name the closest box above the object threshold whose class is
     in the name table: the one whose bottom edge is lowest in the frame. The
     camera looks along the floor, so that is what blocks the robot, not a
@@ -47,10 +51,11 @@ def _result(request_id: str, kind: str, label: Optional[str], confidence: float,
 
 def classify(request_id: str, detections: Sequence[Detection],
              names: Dict[str, str], person_threshold: float,
-             object_threshold: float) -> dict:
+             object_threshold: float, person_min_bottom: float = 0.0) -> dict:
     """Build the /detect/result reply for one frame's detections."""
     people = [d for d in detections
-              if d.name == PERSON and d.confidence >= person_threshold]
+              if d.name == PERSON and d.confidence >= person_threshold
+              and d.box[3] >= person_min_bottom]
     if people:
         best = max(people, key=lambda d: d.confidence)
         return _result(request_id, PERSON, PERSON, best.confidence, None)
