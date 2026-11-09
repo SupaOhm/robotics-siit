@@ -43,6 +43,12 @@ def parse_name_table(entries: Iterable[str]) -> Dict[str, str]:
     return table
 
 
+def describe(detections: Sequence[Detection]) -> str:
+    """One line for the log: each box's class, confidence and bottom edge."""
+    return ", ".join("%s %.2f bottom %.2f" % (d.name, d.confidence, d.box[3])
+                     for d in detections) or "no boxes"
+
+
 def _result(request_id: str, kind: str, label: Optional[str], confidence: float,
             clip: Optional[str]) -> dict:
     return {"id": request_id, "kind": kind, "label": label,

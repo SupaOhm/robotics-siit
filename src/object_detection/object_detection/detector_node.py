@@ -20,7 +20,7 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
 
-from .classifier import classify, parse_name_table
+from .classifier import classify, describe, parse_name_table
 from .yolo_backend import YoloDetector
 
 
@@ -94,7 +94,8 @@ class DetectorNode(Node):
                           self.person_threshold, self.object_threshold,
                           self.person_min_bottom)
         self.result_pub.publish(String(data=json.dumps(result)))
-        self.get_logger().info("result: %s" % json.dumps(result))
+        self.get_logger().info("result: %s | boxes: %s"
+                               % (json.dumps(result), describe(detections)))
 
     def on_tick(self) -> None:
         if (self.pending_id is not None

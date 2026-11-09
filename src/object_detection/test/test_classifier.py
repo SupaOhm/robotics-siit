@@ -1,6 +1,7 @@
 import pytest
 
-from object_detection.classifier import (Detection, classify, parse_name_table)
+from object_detection.classifier import (Detection, classify, describe,
+                                         parse_name_table)
 
 NAMES = {"chair": "chair", "dining table": "table", "bottle": "bottle"}
 
@@ -144,3 +145,15 @@ def test_parse_name_table():
 def test_parse_name_table_rejects_bad_lines(entry):
     with pytest.raises(ValueError):
         parse_name_table([entry])
+
+
+def test_describe_lists_each_box_with_confidence_and_bottom_edge():
+    # Logged with each result, so person_min_bottom can be chosen on the
+    # robot from the log alone, without saving camera frames.
+    assert describe([box("person", 0.934, bottom=0.987),
+                     box("chair", 0.8, bottom=0.5)]) == (
+        "person 0.93 bottom 0.99, chair 0.80 bottom 0.50")
+
+
+def test_describe_nothing_found():
+    assert describe([]) == "no boxes"
