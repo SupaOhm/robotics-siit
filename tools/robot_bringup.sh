@@ -27,42 +27,69 @@ start_node() {
   docker exec -d "$C" bash -ic "mkdir -p $LOGS; exec $2 > $LOGS/$1.log 2>&1"
 }
 
-# wait_topic <topic> <seconds>: wait for one message. ros2 topic echo exits at
-# once while the topic doesn't exist yet, so retry until the time is up.
+# wait_topic <topic> <seconds> [show]: wait for one message, and with "show"
+# print its data field. ros2 topic echo exits at once while the topic doesn't
+# exist yet, so retry until the time is up.
 wait_topic() {
-  local end=$((SECONDS + $2))
+  local end=$((SECONDS + $2)) msg
   while [ $SECONDS -lt $end ]; do
-    in_c "timeout 5 ros2 topic echo --once --no-arr $1 > /dev/null && echo got" | grep -q got \
-      && { echo "ok     $1"; return; }
+    msg=$(in_c "timeout 5 ros2 topic echo --once --no-arr $1 && echo got")
+    if grep -qx got <<< "$msg"; then
+      echo "ok     $1"
+      [ -n "${3:-}" ] && echo "       $(grep -m1 '^data:' <<< "$msg")"
+      return
+    fi
     sleep 1
   done
   die "no message on $1 after $2 s; see $LOGS/*.log in the container"
+}
+
+# wait_nodes <seconds> <node>...: wait until every node is in ros2 node list.
+wait_nodes() {
+  local end=$((SECONDS + $1)) list missing; shift
+  while [ $SECONDS -lt $end ]; do
+    list=$(in_c "ros2 node list")
+    missing=$(for n in "$@"; do grep -qx "$n" <<< "$list" || echo "$n"; done)
+    [ -z "$missing" ] && { echo "ok     $*"; return; }
+    sleep 1
+  done
+  die "not up after $1 s:" $missing "; see $LOGS/*.log in the container"
 }
 
 cmd_vel_publishers() {
   in_c "ros2 topic info /cmd_vel" | sed -n 's/^Publisher count: //p'
 }
 
+# The gamepad is a second /cmd_vel publisher; run_handle.sh starts it at every container start.
+kill_gamepad() {
+  in_c "ps -eo pid,args | grep -E '[y]ahboom_joy_M1|[j]oy_node' | awk '{print \$1}' | xargs -r kill"
+}
+
+OURS='ros2 launch (robot_cor[e]|telegram_aler[t]|password_syste[m]|audio_playe[r]|obstacle_avoidanc[e]|ydlidar_ros2_drive[r])|detector_nod[e]|usb_cam_node_ex[e]|camera_til[t]'
+
 do_start() {
   docker ps --format '{{.Names}}' | grep -qx "$C" || docker start "$C" > /dev/null \
     || die "can't start $C"
   sleep 2
-  [ -n "$(in_c 'ros2 node list' | grep -E '^/(state_machine|detector_node)$')" ] \
-    && die "nodes already running; run stop first"
+  # Any of our nodes, not only the last ones: a failed start leaves the LiDAR
+  # running, and a second driver on the same port fails.
+  [ -n "$(in_c "pgrep -f '$OURS'")" ] && die "nodes already running; run stop first"
 
   # USB numbering changes between boots: link the LiDAR, never the motor board.
-  lidar=$(readlink -f /dev/rplidar) || die "/dev/rplidar missing on the Pi"
-  [ "$lidar" = "$(readlink -f /dev/myserial)" ] && die "/dev/rplidar and /dev/myserial are both $lidar"
+  # readlink -e fails on a missing path; -f would print it and succeed.
+  lidar=$(readlink -e /dev/rplidar) || die "/dev/rplidar missing on the Pi"
+  [ "$lidar" = "$(readlink -e /dev/myserial)" ] && die "/dev/rplidar and /dev/myserial are both $lidar"
   echo "LiDAR  $lidar"
 
-  # The gamepad is a second /cmd_vel publisher; run_handle.sh starts it at every container start.
-  in_c "ps -eo pid,args | grep -E '[y]ahboom_joy_M1|[j]oy_node' | awk '{print \$1}' | xargs -r kill"
+  kill_gamepad
   in_c "ln -sf $lidar /dev/rplidar"
 
   start_node lidar "ros2 launch ydlidar_ros2_driver ydlidar_launch.py"
   wait_topic /scan 20
   start_node avoidance "ros2 launch obstacle_avoidance avoidance.launch.py"
-  wait_topic /obstacle/detected 15
+  # /obstacle/detected publishes from start-up even with no scans; distance
+  # needs a valid reading, so it shows the LiDAR reaches the node.
+  wait_topic /obstacle/distance 15 show
   # The camera must publish before detector_node starts, or the detector gets no frames.
   start_node camera "ros2 run usb_cam usb_cam_node_exe --ros-args -p video_device:=/dev/video0 \
 -p image_width:=640 -p image_height:=480 -p framerate:=15.0 -r image_raw:=/camera/image_raw"
@@ -73,11 +100,14 @@ do_start() {
   start_node audio "env ALSA_CARD=2 ros2 launch audio_player audio.launch.py"
   start_node password "ros2 launch password_system password.launch.py vosk_model_path:=$VOSK"
   start_node telegram "ros2 launch telegram_alert telegram.launch.py env_file:=$WS/.env"
-  sleep 8
+  wait_nodes 30 /detector_node /password_node
+  # On a cold start, run_handle.sh may start the gamepad after the first kill.
+  kill_gamepad
   # Last, so every module is up when it starts sending requests.
   start_node robot_core "ros2 launch robot_core robot_core.launch.py"
   wait_topic /robot/state 20
   do_status
+  [ "$(cmd_vel_publishers)" = "1" ] || die "/cmd_vel must have one publisher (state_machine); run stop"
 }
 
 do_status() {
@@ -87,8 +117,6 @@ do_status() {
   echo "--- /cmd_vel publishers: ${n:-?} (want 1: state_machine)"
   [ "$n" = "1" ] || echo "WARNING: not exactly one /cmd_vel publisher"
 }
-
-OURS='ros2 launch (robot_cor[e]|telegram_aler[t]|password_syste[m]|audio_playe[r]|obstacle_avoidanc[e]|ydlidar_ros2_drive[r])|detector_nod[e]|usb_cam_node_ex[e]|camera_til[t]'
 
 do_stop() {
   # state_machine first, so its final zero /cmd_vel is the last command the wheels get.

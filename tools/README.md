@@ -172,15 +172,20 @@ bash ~/share/robotics-siit/tools/robot_bringup.sh stop    # state_machine first,
 2. Links `/dev/rplidar` in the container to the port the Pi's `/dev/rplidar`
    points to. It refuses if that is the motor board's port (`/dev/myserial`).
 3. Starts the LiDAR, `obstacle_avoidance` and the camera, waiting for `/scan`,
-   `/obstacle/detected` and `/camera/image_raw`. The camera must publish
-   before `detector_node` starts, or the detector gets no frames.
-4. Starts the detector, audio (`ALSA_CARD=2`), password and Telegram nodes.
-5. Starts `robot_core` (`state_machine` and `camera_tilt`) last, and waits for
+   `/obstacle/distance` (printed, so you see what is in front) and
+   `/camera/image_raw`. The camera must publish before `detector_node`
+   starts, or the detector gets no frames.
+4. Starts the detector, audio (`ALSA_CARD=2`), password and Telegram nodes,
+   and waits for `/detector_node` and `/password_node`.
+5. Kills the gamepad again: on a cold start the container may launch it
+   after the first kill.
+6. Starts `robot_core` (`state_machine` and `camera_tilt`) last, and waits for
    `/robot/state`.
-6. Prints the node list, and a warning unless `/cmd_vel` has exactly one
-   publisher.
+7. Prints the node list, and exits with an error unless `/cmd_vel` has
+   exactly one publisher.
 
-It refuses to start if `state_machine` or `detector_node` is already running.
+It refuses to start if any of its nodes is already running: run `stop` first,
+also after a failed `start`.
 Logs are in `/tmp/bringup/<node>.log` in the container. Nodes run in
 interactive shells (`bash -ic`), so they get `/root/.bashrc`: the workspaces,
 domain 42 and `ROBOT_PASSWORD_HASH`. Telegram reads `.env` at the root of the
