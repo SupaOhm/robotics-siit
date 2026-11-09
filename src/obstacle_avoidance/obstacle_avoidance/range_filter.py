@@ -43,3 +43,14 @@ class RangeFilter:
 
     def reset(self) -> None:
         self._readings.clear()
+
+
+def from_bumper(distance: Optional[float], sensor_to_bumper: float) -> Optional[float]:
+    """A distance from the sensor, as a distance from the front bumper.
+
+    The sensor sits ``sensor_to_bumper`` behind the bumper, so subtract it.
+    Never below 0: anything that close is touching the bumper.
+    """
+    if distance is None:
+        return None
+    return max(distance - sensor_to_bumper, 0.0)

@@ -3,7 +3,7 @@
 Topics:
   sub  <scan_topic>         LaserScan  input_type == "scan" (LiDAR)
   sub  <range_topic>        Range      input_type == "range" (ultrasonic)
-  pub  /obstacle/distance   Float32    filtered front distance (m)
+  pub  /obstacle/distance   Float32    filtered front distance from the bumper (m)
   pub  /obstacle/detected   Bool       fixed rate (10 Hz): True while blocked, before the
                                        first valid reading, and while the sensor is silent
   sub  <imu_topic>          Imu        gyro z, for the turned angle (optional)
@@ -28,7 +28,7 @@ from std_msgs.msg import Bool, Empty, Float32, String
 from .avoider import Avoider, EventType
 from .detector import ObstacleDetector
 from .gyro import GyroYaw
-from .range_filter import RangeFilter
+from .range_filter import RangeFilter, from_bumper
 from .scan import front_left_right
 
 RESULT_FOR_EVENT = {
@@ -52,6 +52,7 @@ class AvoidanceNode(Node):
         p("filter_window", 5)
         p("min_range", 0.02)
         p("max_range", 4.0)
+        p("sensor_to_bumper", 0.15)  # m; stop, clear and /obstacle/distance are from the bumper
         p("stop_distance", 0.40)
         p("clear_distance", 0.50)
         p("sensor_timeout", 0.5)
@@ -71,6 +72,7 @@ class AvoidanceNode(Node):
         self.corridor_half_width = float(g("corridor_half_width"))
         self.side_half_width = math.radians(float(g("side_half_width_deg")))
         self.sensor_timeout = float(g("sensor_timeout"))
+        self.sensor_to_bumper = float(g("sensor_to_bumper"))
 
         def make_filter():
             return RangeFilter(int(g("filter_window")), float(g("min_range")),
@@ -114,8 +116,14 @@ class AvoidanceNode(Node):
         self.create_timer(1.0 / float(g("control_rate")), self.on_timer)
         self.create_timer(1.0 / float(g("detected_rate")), self.publish_detected)
         self.get_logger().info(
-            "avoidance_node ready (input=%s, stop=%.2f m, clear=%.2f m)"
-            % (self.input_type, self.detector.stop_distance, clear_distance))
+            "avoidance_node ready (input=%s, front %.0f deg, stop=%.2f m, clear=%.2f m "
+            "from the bumper, sensor %.2f m behind it)"
+            % (self.input_type, math.degrees(self.front_angle), self.detector.stop_distance,
+               clear_distance, self.sensor_to_bumper))
+
+    def front_distance(self):
+        """Filtered front distance from the bumper, or None before any reading."""
+        return from_bumper(self.front.value, self.sensor_to_bumper)
 
     def now(self) -> float:
         return self.get_clock().now().nanoseconds / 1e9
@@ -135,7 +143,8 @@ class AvoidanceNode(Node):
     def on_front(self, reading: float) -> None:
         if not self.front.valid(reading):
             return  # glitches don't count as a live sensor, so only-glitches goes stale
-        distance = self.front.update(reading)
+        self.front.update(reading)
+        distance = self.front_distance()
         self.last_reading_t = self.now()
         if self.stale:
             self.get_logger().info("distance sensor online")
@@ -173,7 +182,7 @@ class AvoidanceNode(Node):
             self.detector.reset()
             self.publish(self.avoider.fail())
         if self.avoider.active:
-            self.publish(self.avoider.tick(t, self.front.value, self.gyro.yaw(t)))
+            self.publish(self.avoider.tick(t, self.front_distance(), self.gyro.yaw(t)))
         if self.avoider.active:
             self.send_turn(self.avoider.angular_velocity)
 

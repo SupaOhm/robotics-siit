@@ -32,6 +32,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src" / "obstacle_avoidance"))
 sys.path.insert(0, str(REPO / "tools"))
 
+from obstacle_avoidance.range_filter import from_bumper  # noqa: E402
 from obstacle_avoidance.scan import front_left_right  # noqa: E402
 from sim_avoidance import load_params  # noqa: E402
 
@@ -183,7 +184,7 @@ def run(args):
     threading.Thread(target=spin, daemon=True).start()
 
     def front_reading(seconds=1.0):
-        """Median of what obstacle_avoidance's corridor would read."""
+        """Median of what obstacle_avoidance would read: the corridor, from the bumper."""
         t0 = time.monotonic()
         time.sleep(seconds)
         fronts = []
@@ -193,7 +194,7 @@ def run(args):
                 math.radians(front_deg[0]), P["corridor_half_width"],
                 math.radians(P["side_half_width_deg"]), max(s.range_min, P["min_range"]))
             if not math.isnan(front):
-                fronts.append(min(front, P["max_range"]))
+                fronts.append(from_bumper(min(front, P["max_range"]), P["sensor_to_bumper"]))
         return statistics.median(fronts) if fronts else None
 
     def ask(text):
@@ -227,7 +228,8 @@ def run(args):
 
         if scans and not args.no_objects:
             print("2. Which way is front", flush=True)
-            expected = args.bumper_gap + PLACE  # what the LiDAR should read
+            expected = PLACE  # what the node should read, from the bumper
+            raw = PLACE + P["sensor_to_bumper"]  # what the LiDAR itself should read
             if ask("Put a box 0.3 m straight ahead of the front bumper, nothing else within 1 m"):
                 t0 = time.monotonic()
                 time.sleep(1.0)
@@ -236,7 +238,7 @@ def run(args):
                 def look(center):
                     # Only near the front (or straight behind): things beside the robot aren't the box
                     hits = [closest_return(s.ranges, s.angle_min, s.angle_increment, center, 45,
-                                           max_dist=expected + 0.5,
+                                           max_dist=raw + 0.5,
                                            min_valid=max(s.range_min, P["min_range"]))
                             for s in scans]
                     return [h for h in hits if h]
@@ -250,11 +252,11 @@ def run(args):
                         report("INFO", "the next checks look along %+d deg, where the box was" % front_deg[0])
                     front = front_reading()
                     if front is not None:
-                        report("INFO", "box: closest return %.2f m, obstacle_avoidance reads %.2f m "
-                               "(expected about %.2f, stops at %.2f)"
-                               % (statistics.median(d for d, _ in hits), front, expected, P["stop_distance"]))
+                        report("INFO", "box: the LiDAR's closest return %.2f m (expected about %.2f); "
+                               "obstacle_avoidance reads %.2f m from the bumper (expected about %.2f, stops at %.2f)"
+                               % (statistics.median(d for d, _ in hits), raw, front, expected, P["stop_distance"]))
                 else:
-                    report("FAIL", "no return near %.2f m: is the box in the LiDAR's view?" % expected)
+                    report("FAIL", "no LiDAR return near %.2f m: is the box in the LiDAR's view?" % raw)
             if ask("Take the box away: nothing within 1 m of the front bumper"):
                 front = front_reading()
                 if front is not None:
@@ -310,8 +312,6 @@ def main():
     parser.add_argument("--scan-topic", default="/scan")
     parser.add_argument("--imu-topic", default="/imu/data_raw")
     parser.add_argument("--cmd-vel-topic", default="/cmd_vel")
-    parser.add_argument("--bumper-gap", type=float, default=0.15,
-                        help="m from the LiDAR to the front bumper (about 0.15 on the M1, taped)")
     parser.add_argument("--no-objects", action="store_true", help="skip the box, cup and bottle")
     parser.add_argument("--no-turn", action="store_true", help="skip the turn (publishes /cmd_vel)")
     parser.add_argument("--force", action="store_true", help="turn even if something else publishes /cmd_vel")

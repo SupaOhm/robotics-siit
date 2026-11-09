@@ -31,7 +31,7 @@ sys.path.insert(0, str(REPO / "src" / "obstacle_avoidance"))
 
 from obstacle_avoidance.avoider import Avoider, EventType
 from obstacle_avoidance.detector import ObstacleDetector
-from obstacle_avoidance.range_filter import RangeFilter
+from obstacle_avoidance.range_filter import RangeFilter, from_bumper
 from obstacle_avoidance.scan import front_left_right
 
 WHEEL_RADIUS = 0.05   # m, Lab 03/04 robot (Lab 04 main.py)
@@ -129,9 +129,10 @@ def run(sim, args, log):
                 right_f.update(r)
                 hits = [x for x in scan["ranges"] if x >= scan["rangeMin"]]
                 closest_seen = min([closest_seen] + hits)
+                # The sim robot's own geometry: its LiDAR sits half_len behind the front
                 if front_f.value is not None:
-                    detector.update(front_f.value)
-            front = front_f.value
+                    detector.update(from_bumper(front_f.value, half_len))
+            front = from_bumper(front_f.value, half_len)
             if front is None:
                 wheels(0, 0)
                 continue
@@ -143,7 +144,7 @@ def run(sim, args, log):
                     blocked_at = None
                     wheels(0, 0)
                     state, t_stopped = "STOPPED", t
-                    log("t=%5.2f  obstacle at %.3f m, stop" % (t, front))
+                    log("t=%5.2f  obstacle %.3f m from the front, stop" % (t, front))
                 elif blocked_at is not None or not detector.blocked:
                     wheels(args.speed, 0)
                 else:
@@ -152,8 +153,8 @@ def run(sim, args, log):
                 if t - t_stopped >= ANNOUNCE_PAUSE:
                     ev = avoider.start(t, side(left_f), side(right_f), heading())[0]
                     yaw_start, state = heading(), "AVOID"
-                    log("t=%5.2f  stopped at %.3f m (gap at the front %.3f m), left %.2f right %.2f, turn %s"
-                        % (t, front, front - half_len, side(left_f), side(right_f),
+                    log("t=%5.2f  stopped %.3f m from the front, left %.2f right %.2f, turn %s"
+                        % (t, front, side(left_f), side(right_f),
                            "left" if ev.direction > 0 else "right"))
             elif state == "AVOID":
                 events = avoider.tick(t, front, heading())
