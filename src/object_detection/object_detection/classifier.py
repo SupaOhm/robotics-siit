@@ -12,7 +12,7 @@ Rules (docs/interfaces.md, D8):
 """
 
 from dataclasses import dataclass
-from typing import Dict, Iterable, Optional, Sequence
+from typing import Dict, Iterable, Optional, Sequence, Tuple
 
 PERSON = "person"
 UNKNOWN_CLIP = "found_obstacle"
@@ -22,7 +22,9 @@ UNKNOWN_CLIP = "found_obstacle"
 class Detection:
     name: str           # YOLO class name, e.g. "dining table"
     confidence: float
-    area: float         # box area in pixels
+    area: float         # box area; only compared within one frame
+    # x1, y1, x2, y2 as fractions of the frame's width and height, (0, 0) top left
+    box: Optional[Tuple[float, float, float, float]] = None
 
 
 def parse_name_table(entries: Iterable[str]) -> Dict[str, str]:

@@ -27,13 +27,17 @@ def read_settings(path: str) -> Dict:
 
 
 def answer(boxes: Sequence, settings: Dict) -> str:
-    """What the robot says for one frame's [class, confidence, area] boxes:
-    a spoken label, "person" or "unknown"."""
+    """What the robot says for one frame's boxes: a spoken label, "person"
+    or "unknown".
+
+    Each box is [class, confidence, x1, y1, x2, y2], with the corners as
+    fractions of the frame's width and height.
+    """
     # The robot runs YOLO at the lower threshold, so it never sees weaker
     # boxes. The JSON keeps them only so the thresholds can be lowered.
     floor = min(settings["person"], settings["object"])
-    detections = [Detection(name, conf, area)
-                  for name, conf, area in boxes if conf >= floor]
+    detections = [Detection(name, conf, (x2 - x1) * (y2 - y1), (x1, y1, x2, y2))
+                  for name, conf, x1, y1, x2, y2 in boxes if conf >= floor]
     result = classify("x", detections, settings["names"],
                       settings["person"], settings["object"])
     return result["label"] or result["kind"]
