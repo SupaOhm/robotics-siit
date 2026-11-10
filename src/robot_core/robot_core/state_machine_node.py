@@ -6,12 +6,15 @@ back into messages.
 """
 
 import json
+import signal
+import time
 from dataclasses import fields
 
 import rclpy
 from geometry_msgs.msg import Twist
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile
+from rclpy.signals import SignalHandlerOptions
 from std_msgs.msg import Bool, Empty, Int32, String
 
 from .machine import Settings, StateMachine
@@ -101,14 +104,25 @@ class StateMachineNode(Node):
 
 
 def main(args=None):
-    rclpy.init(args=args)
+    # Python handles Ctrl-C, so the context is still valid for the final stop.
+    rclpy.init(args=args, signal_handler_options=SignalHandlerOptions.NO)
+    # SIGTERM (launch escalating, docker stop) also ends in the final stop below.
+    signal.signal(signal.SIGTERM, signal.default_int_handler)
     node = StateMachineNode()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
     finally:
-        node.pubs["/cmd_vel"].publish(Twist())  # leave the wheels stopped
+        # Ctrl-C arrives twice (the process group's and launch's): the second
+        # must not cut the stop short.
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        # Leave the wheels stopped. Three times, as in #42: one publish right
+        # before destroy_node can be lost.
+        for _ in range(3):
+            node.pubs["/cmd_vel"].publish(Twist())
+            time.sleep(0.05)
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()

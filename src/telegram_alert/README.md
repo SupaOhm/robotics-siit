@@ -147,6 +147,15 @@ launch argument, so the launch file never overrides the YAML. With
 `colcon build --symlink-install` (as in `docs/robot-setup.md`), edits to
 the YAML apply without rebuilding.
 
+**Run only one copy of the bot at a time.** This includes `bot_demo` and
+other machines. With two running, both log `Conflict: terminated by other
+getUpdates request`, and button presses can go to either one. Before
+starting `telegram_node` on the robot, check inside `eager_pascal`:
+
+```bash
+ps aux | grep [t]elegram_node    # no output: none running
+```
+
 ## Try it on a laptop (no ROS)
 
 ```bash

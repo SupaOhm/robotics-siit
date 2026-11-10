@@ -2,7 +2,7 @@ import math
 
 import pytest
 
-from obstacle_avoidance.range_filter import RangeFilter
+from obstacle_avoidance.range_filter import RangeFilter, from_bumper
 
 
 def test_empty_until_first_valid_reading():
@@ -53,3 +53,15 @@ def test_valid():
     assert f.valid(math.inf)
     assert not f.valid(0.0)
     assert not f.valid(math.nan)
+
+
+def test_from_bumper_subtracts_the_sensor_gap():
+    assert from_bumper(0.55, 0.15) == pytest.approx(0.40)
+
+
+def test_from_bumper_never_goes_below_zero():
+    assert from_bumper(0.10, 0.15) == 0.0
+
+
+def test_from_bumper_passes_no_reading_through():
+    assert from_bumper(None, 0.15) is None

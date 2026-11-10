@@ -122,7 +122,10 @@ source install/setup.bash
 # OpenCV GUI calls off the main thread (rclpy owns it): best effort, not yet
 # tested on the laptop. webcam_demo below is the reliable overlay.
 ros2 launch gesture_control gesture.launch.py show_window:=true
-ros2 launch gesture_control gesture.launch.py camera_index:=1 camera_name:="" model_path:=/path/to/hand_landmarker.task
+# Linux ignores camera_name, so camera_index alone picks the camera:
+ros2 launch gesture_control gesture.launch.py camera_index:=1 model_path:=/path/to/hand_landmarker.task
+# macOS, by index: camera_name:="" fails in bash and zsh (the shell drops the quotes)
+ros2 launch gesture_control gesture.launch.py camera_index:=1 camera_name:="''"
 
 # Keyboard, no camera (for Lane 1 / Lane 5 tests). Needs a terminal, so ros2 run:
 ros2 run gesture_control gesture_node --ros-args -p input_mode:=keyboard
@@ -169,7 +172,7 @@ laptop and camera. Defaults are in [config/gesture.yaml](config/gesture.yaml).
 |---|---|---|
 | `input_mode` | `camera` | `camera` or `keyboard` |
 | `camera_index` | 0 | OpenCV camera index. Used on Linux, or when `camera_name` is empty or matches no camera |
-| `camera_name` | `FaceTime` | macOS: open the camera whose name or model contains this (any case). Overrides `camera_index`, so a connected iPhone (Continuity Camera) is not picked. `""` uses `camera_index` |
+| `camera_name` | `FaceTime` | macOS: open the camera whose name or model contains this (any case). Overrides `camera_index`, so a connected iPhone (Continuity Camera) is not picked. Empty uses `camera_index`: on the command line write `camera_name:="''"`, as `camera_name:=""` fails with `malformed launch argument` |
 | `model_path` | `~/models/hand_landmarker.task` | MediaPipe hand model |
 | `show_window` | false | Draw landmarks and the word in a window |
 | `publish_rate` | 10.0 | Hz, fixed |

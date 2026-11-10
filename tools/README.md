@@ -43,8 +43,8 @@ the name table, `person`, or `obstacle` for something the robot can't name.
 ros2 bag record -o chair_front /camera/image_raw /cmd_vel
 ```
 
-Drive at the object and stop where avoidance would stop the robot, about 25 cm
-from the bumper (0.40 m from the LiDAR, which sits 15 cm behind it). Stop with the teleop stop key, not by letting go of the keys, so
+Drive at the object and stop where avoidance would stop the robot, 0.40 m
+from the bumper. Stop with the teleop stop key, not by letting go of the keys, so
 `/cmd_vel` records the stop. Keep recording for 5 s, then press Ctrl+C. The robot asks the detector
 the moment it stops, so the tool uses frames from the moment `/cmd_vel` goes
 to zero, one every 0.5 s.

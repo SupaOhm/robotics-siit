@@ -48,13 +48,21 @@ class DetectorNode(Node):
         self.bridge = CvBridge()
         self.pending_id = None
         self.requested_at = 0.0
+        # For the no-frame warning: did frames never arrive, or stop?
+        self.frames = 0
+        self.last_frame_at = None
 
         self.result_pub = self.create_publisher(String, "/detect/result", 10)
         self.create_subscription(String, "/detect/request", self.on_request, 10)
         # Depth 1: frames that arrive during a slow inference are dropped.
+        # Reliable, not best-effort: on the robot a best-effort subscription
+        # to usb_cam's 640x480 frames stopped receiving after 2 to 14 minutes
+        # and never recovered, while the camera kept publishing and a reliable
+        # subscription in a second detector got every frame (10 Nov). With no
+        # frames every stop became a person (D7), as on 9 Nov.
         self.create_subscription(
             Image, g("image_topic"), self.on_image,
-            QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT))
+            QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE))
         self.create_timer(0.5, self.on_tick)
         self.get_logger().info("detector_node ready (%d names, topic %s)"
                                % (len(self.names), g("image_topic")))
@@ -67,6 +75,10 @@ class DetectorNode(Node):
         self.requested_at = self.now()
 
     def on_image(self, msg) -> None:
+        self.frames += 1
+        self.last_frame_at = self.now()
+        if self.frames == 1:
+            self.get_logger().info("first camera frame received")
         if self.pending_id is None:
             return
         request_id, self.pending_id = self.pending_id, None
@@ -84,8 +96,11 @@ class DetectorNode(Node):
     def on_tick(self) -> None:
         if (self.pending_id is not None
                 and self.now() - self.requested_at > self.frame_timeout):
-            self.get_logger().warning("request %s: no camera frame, not replying"
-                                      % self.pending_id)
+            last = ("never" if self.last_frame_at is None
+                    else "%.1f s ago" % (self.now() - self.last_frame_at))
+            self.get_logger().warning(
+                "request %s: no camera frame, not replying (%d frames since "
+                "start, last %s)" % (self.pending_id, self.frames, last))
             self.pending_id = None
 
 
