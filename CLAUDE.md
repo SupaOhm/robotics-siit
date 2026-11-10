@@ -64,7 +64,7 @@ Rules that span packages:
 - One `ament_python` package per module in `src/<package>/`. Copy the layout of `src/password_system`.
 - Put logic in plain Python modules and keep the ROS node thin, so tests run without ROS.
 - Import heavy libraries (MediaPipe, Ultralytics) inside the class that needs them, not at module level.
-- Subscribe to camera topics with a best-effort QoS such as `qos_profile_sensor_data`.
+- Subscribe to `usb_cam` on the robot as reliable, depth 1. A best-effort subscription to its 640x480 frames stopped receiving after a few minutes (#57). Use best-effort only for camera topics read over WiFi.
 - Keep NumPy below 2 anywhere `cv_bridge` runs. Humble's `cv_bridge` fails to import with NumPy 2, and `pip install ultralytics` pulls it in unless it's pinned.
 - Benchmarks and one-off scripts go in `tools/`, and CoppeliaSim scenes in `sim/`.
 
