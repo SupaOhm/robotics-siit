@@ -60,6 +60,18 @@ cmd_vel_publishers() {
   in_c "ros2 topic info /cmd_vel" | sed -n 's/^Publisher count: //p'
 }
 
+# The base driver is the only /cmd_vel subscriber. If it started before the
+# Pi joined the WiFi, nodes started later can't see it (9 Nov QA, finding 1),
+# and the wheels would never get state_machine's commands.
+wait_base_driver() {
+  local end=$((SECONDS + $1))
+  while [ $SECONDS -lt $end ]; do
+    [ "$(in_c "ros2 topic info /cmd_vel" | sed -n 's/^Subscription count: //p')" -ge 1 ] 2>/dev/null       && { echo "ok     base driver (/cmd_vel subscriber)"; return; }
+    sleep 1
+  done
+  die "no /cmd_vel subscriber after $1 s: the base driver isn't visible, maybe it started before the WiFi; run: docker restart $C, then start again"
+}
+
 # The gamepad is a second /cmd_vel publisher; run_handle.sh starts it at every container start.
 kill_gamepad() {
   in_c "ps -eo pid,args | grep -E '[y]ahboom_joy_M1|[j]oy_node' | awk '{print \$1}' | xargs -r kill"
@@ -82,6 +94,7 @@ do_start() {
   echo "LiDAR  $lidar"
 
   kill_gamepad
+  wait_base_driver 20
   in_c "ln -sf $lidar /dev/rplidar"
 
   start_node lidar "ros2 launch ydlidar_ros2_driver ydlidar_launch.py"

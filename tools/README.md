@@ -168,7 +168,9 @@ bash ~/share/robotics-siit/tools/robot_bringup.sh stop    # state_machine first,
 `start` does, in order:
 
 1. Kills the gamepad nodes (`yahboom_joy_M1`, `joy_node`), a second `/cmd_vel`
-   publisher. The base driver keeps running.
+   publisher. The base driver keeps running, and `start` waits until it shows
+   as a `/cmd_vel` subscriber. If the container started before the Pi joined
+   the WiFi, it never does: run `docker restart eager_pascal`, then `start`.
 2. Links `/dev/rplidar` in the container to the port the Pi's `/dev/rplidar`
    points to. It refuses if that is the motor board's port (`/dev/myserial`).
 3. Starts the LiDAR, `obstacle_avoidance` and the camera, waiting for `/scan`,
