@@ -55,9 +55,14 @@ class DetectorNode(Node):
         self.result_pub = self.create_publisher(String, "/detect/result", 10)
         self.create_subscription(String, "/detect/request", self.on_request, 10)
         # Depth 1: frames that arrive during a slow inference are dropped.
+        # Reliable, not best-effort: on the robot a best-effort subscription
+        # to usb_cam's 640x480 frames stopped receiving after 2 to 14 minutes
+        # and never recovered, while the camera kept publishing and a reliable
+        # subscription in a second detector got every frame (10 Nov). With no
+        # frames every stop became a person (D7), as on 9 Nov.
         self.create_subscription(
             Image, g("image_topic"), self.on_image,
-            QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT))
+            QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE))
         self.create_timer(0.5, self.on_tick)
         self.get_logger().info("detector_node ready (%d names, topic %s)"
                                % (len(self.names), g("image_topic")))
