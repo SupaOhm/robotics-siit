@@ -10,11 +10,13 @@ detector_node:
     object_threshold: 0.5
 
     # A person only counts if their box reaches this far down the frame
-    # (0 = top, 1 = bottom edge). Close enough to block the robot, a person
-    # reaches the bottom edge (0.99 in person_front); people further back
-    # end higher up. 0 counts every person in frame, as in docs/interfaces.md
-    # (D8). Raise it only from robot recordings, after Lane 1 agrees.
-    person_min_bottom: 0.0
+    # (0 = top, 1 = bottom edge). On the floor, lower in the frame is closer.
+    # On the robot at tilt 30 (10 Nov), a bottle at the stop distance ended at
+    # 0.74 and people walking behind it at 0.46 to 0.61, so 0.65 keeps anyone
+    # who could block the robot and ignores people further back. A person
+    # walking up close reaches the bottom edge (0.99 in person_front).
+    # 0 counts every person in frame (the old person first rule).
+    person_min_bottom: 0.65
 
     # "yolo class=spoken label". Each label needs a found_<label> clip from
     # Lane 4 (audio_player).
