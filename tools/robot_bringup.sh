@@ -81,7 +81,6 @@ kill_gamepad() {
 # Our launch files and our executables, so a node started by hand with ros2 run
 # is caught too. The [x] keeps the pattern from matching the shell running pgrep.
 OURS='ros2 launch (robot_cor[e]|telegram_aler[t]|password_syste[m]|audio_playe[r]|obstacle_avoidanc[e]|ydlidar_ros2_drive[r])|(^|[ /])(state_machin[e]|camera_til[t]|telegram_nod[e]|password_nod[e]|audio_nod[e]|avoidance_nod[e]|detector_nod[e]|usb_cam_node_ex[e]|ydlidar_ros2_driver_nod[e])( |$)'
-SM='ros2 launch robot_cor[e]|(^|[ /])state_machin[e]( |$)'
 
 do_start() {
   docker ps --format '{{.Names}}' | grep -qx "$C" || docker start "$C" > /dev/null \
@@ -99,7 +98,7 @@ do_start() {
 
   kill_gamepad
   wait_base_driver 20
-  [ "$(in_c "ln -sf $lidar /dev/rplidar && test -e /dev/rplidar && echo ok")" = ok ] \
+  in_c "ln -sf $lidar /dev/rplidar && test -e /dev/rplidar && echo ok" | grep -qx ok \
     || die "can't link /dev/rplidar to $lidar in $C"
 
   start_node lidar "ros2 launch ydlidar_ros2_driver ydlidar_launch.py"
@@ -139,7 +138,9 @@ do_status() {
 do_stop() {
   local start=$SECONDS end
   # state_machine first, so its final zero /cmd_vel is the last command the wheels get.
-  in_c "pkill -INT -f '$SM'"
+  # Signal the launch, or a hand-started state_machine if there is no launch, never
+  # both: launch passes SIGINT on, and a second one would skip the final zero.
+  in_c "pkill -INT -f 'ros2 launch robot_cor[e]' || pkill -INT -f '(^|[ /])state_machin[e]( |$)'"
   sleep 3
   in_c "pkill -INT -f '$OURS'"
   end=$((SECONDS + 10))
