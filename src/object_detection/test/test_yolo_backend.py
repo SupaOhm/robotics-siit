@@ -1,5 +1,6 @@
 import pytest
 
+from object_detection.classifier import Detection
 from object_detection.yolo_backend import YoloDetector, resolve_model_path
 
 
@@ -48,3 +49,35 @@ def test_error_shows_a_windows_path_as_typed(monkeypatch):
 def test_detector_checks_the_model_before_loading_ultralytics(tmp_path):
     with pytest.raises(FileNotFoundError, match="README"):
         YoloDetector(str(tmp_path / "nope"), 320, 0.25)
+
+
+class Row(list):
+    """One row of an Ultralytics tensor: indexable, with tolist()."""
+
+    def tolist(self):
+        return list(self)
+
+
+class FakeBox:
+    def __init__(self, cls, conf, xyxy, xyxyn):
+        self.cls, self.conf = [cls], [conf]
+        self.xyxy, self.xyxyn = [Row(xyxy)], [Row(xyxyn)]
+
+
+class FakeModel:
+    """Answers predict() like Ultralytics, for a 640 x 480 frame."""
+
+    def predict(self, image, **settings):
+        result = type("Result", (), {})()
+        result.names = {0: "person", 39: "bottle"}
+        result.boxes = [FakeBox(39, 0.9, [320, 240, 384, 480],
+                                [0.5, 0.5, 0.6, 1.0])]
+        return [result]
+
+
+def test_detection_has_the_box_as_fractions_of_the_frame():
+    detector = YoloDetector.__new__(YoloDetector)  # skip loading a model
+    detector._model, detector._image_size, detector._confidence = (
+        FakeModel(), 320, 0.25)
+    [bottle] = detector.detect(None)
+    assert bottle == Detection("bottle", 0.9, (0.5, 0.5, 0.6, 1.0))

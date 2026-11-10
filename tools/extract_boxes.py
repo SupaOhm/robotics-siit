@@ -65,9 +65,10 @@ class Boxes:
         self.image_size = image_size
 
     def run(self, bgr, annotated_path):
-        boxes = [[d.name, round(d.confidence, 2), int(d.area)]
+        # [class, confidence, x1, y1, x2, y2], corners as fractions of the frame
+        boxes = [[d.name, round(d.confidence, 2)] + [round(v, 3) for v in d.box]
                  for d in self.detector.detect(bgr)]
-        # YoloDetector returns no coordinates, so ask the model for the plot.
+        # Ask the model again for a copy of the frame with the boxes drawn.
         plot = self.detector._model.predict(
             bgr, imgsz=self.image_size, conf=BOX_CONFIDENCE,
             verbose=False)[0].plot()

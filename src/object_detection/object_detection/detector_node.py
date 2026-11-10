@@ -48,6 +48,9 @@ class DetectorNode(Node):
         self.bridge = CvBridge()
         self.pending_id = None
         self.requested_at = 0.0
+        # For the no-frame warning: did frames never arrive, or stop?
+        self.frames = 0
+        self.last_frame_at = None
 
         self.result_pub = self.create_publisher(String, "/detect/result", 10)
         self.create_subscription(String, "/detect/request", self.on_request, 10)
@@ -67,6 +70,10 @@ class DetectorNode(Node):
         self.requested_at = self.now()
 
     def on_image(self, msg) -> None:
+        self.frames += 1
+        self.last_frame_at = self.now()
+        if self.frames == 1:
+            self.get_logger().info("first camera frame received")
         if self.pending_id is None:
             return
         request_id, self.pending_id = self.pending_id, None
@@ -84,8 +91,11 @@ class DetectorNode(Node):
     def on_tick(self) -> None:
         if (self.pending_id is not None
                 and self.now() - self.requested_at > self.frame_timeout):
-            self.get_logger().warning("request %s: no camera frame, not replying"
-                                      % self.pending_id)
+            last = ("never" if self.last_frame_at is None
+                    else "%.1f s ago" % (self.now() - self.last_frame_at))
+            self.get_logger().warning(
+                "request %s: no camera frame, not replying (%d frames since "
+                "start, last %s)" % (self.pending_id, self.frames, last))
             self.pending_id = None
 
 
