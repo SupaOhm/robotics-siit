@@ -46,18 +46,18 @@ wait_topic() {
 
 # wait_nodes <seconds> <node>...: wait until every node is in ros2 node list.
 wait_nodes() {
-  local end=$((SECONDS + $1)) list missing; shift
+  local secs=$1 end=$((SECONDS + $1)) list missing; shift; missing=$*
   while [ $SECONDS -lt $end ]; do
-    list=$(in_c "ros2 node list")
+    list=$(in_c "timeout 5 ros2 node list")
     missing=$(for n in "$@"; do grep -qx "$n" <<< "$list" || echo "$n"; done)
     [ -z "$missing" ] && { echo "ok     $*"; return; }
     sleep 1
   done
-  die "not up after $1 s:" $missing "; see $LOGS/*.log in the container"
+  die "not up after $secs s:" $missing "; see $LOGS/*.log in the container"
 }
 
 cmd_vel_publishers() {
-  in_c "ros2 topic info /cmd_vel" | sed -n 's/^Publisher count: //p'
+  in_c "timeout 5 ros2 topic info /cmd_vel" | sed -n 's/^Publisher count: //p'
 }
 
 # The base driver is the only /cmd_vel subscriber. If it started before the
@@ -66,7 +66,8 @@ cmd_vel_publishers() {
 wait_base_driver() {
   local end=$((SECONDS + $1))
   while [ $SECONDS -lt $end ]; do
-    [ "$(in_c "ros2 topic info /cmd_vel" | sed -n 's/^Subscription count: //p')" -ge 1 ] 2>/dev/null       && { echo "ok     base driver (/cmd_vel subscriber)"; return; }
+    [ "$(in_c "timeout 5 ros2 topic info /cmd_vel" | sed -n 's/^Subscription count: //p')" -ge 1 ] 2>/dev/null \
+      && { echo "ok     base driver (/cmd_vel subscriber)"; return; }
     sleep 1
   done
   die "no /cmd_vel subscriber after $1 s: the base driver isn't visible, maybe it started before the WiFi; run: docker restart $C, then start again"
@@ -77,7 +78,10 @@ kill_gamepad() {
   in_c "ps -eo pid,args | grep -E '[y]ahboom_joy_M1|[j]oy_node' | awk '{print \$1}' | xargs -r kill"
 }
 
-OURS='ros2 launch (robot_cor[e]|telegram_aler[t]|password_syste[m]|audio_playe[r]|obstacle_avoidanc[e]|ydlidar_ros2_drive[r])|detector_nod[e]|usb_cam_node_ex[e]|camera_til[t]'
+# Our launch files and our executables, so a node started by hand with ros2 run
+# is caught too. The [x] keeps the pattern from matching the shell running pgrep.
+OURS='ros2 launch (robot_cor[e]|telegram_aler[t]|password_syste[m]|audio_playe[r]|obstacle_avoidanc[e]|ydlidar_ros2_drive[r])|(^|[ /])(state_machin[e]|camera_til[t]|telegram_nod[e]|password_nod[e]|audio_nod[e]|avoidance_nod[e]|detector_nod[e]|usb_cam_node_ex[e]|ydlidar_ros2_driver_nod[e])( |$)'
+SM='ros2 launch robot_cor[e]|(^|[ /])state_machin[e]( |$)'
 
 do_start() {
   docker ps --format '{{.Names}}' | grep -qx "$C" || docker start "$C" > /dev/null \
@@ -95,7 +99,8 @@ do_start() {
 
   kill_gamepad
   wait_base_driver 20
-  in_c "ln -sf $lidar /dev/rplidar"
+  [ "$(in_c "ln -sf $lidar /dev/rplidar && test -e /dev/rplidar && echo ok")" = ok ] \
+    || die "can't link /dev/rplidar to $lidar in $C"
 
   start_node lidar "ros2 launch ydlidar_ros2_driver ydlidar_launch.py"
   wait_topic /scan 20
@@ -113,7 +118,7 @@ do_start() {
   start_node audio "env ALSA_CARD=2 ros2 launch audio_player audio.launch.py"
   start_node password "ros2 launch password_system password.launch.py vosk_model_path:=$VOSK"
   start_node telegram "ros2 launch telegram_alert telegram.launch.py env_file:=$WS/.env"
-  wait_nodes 30 /detector_node /password_node
+  wait_nodes 30 /detector_node /audio_node /password_node /telegram_node
   # On a cold start, run_handle.sh may start the gamepad after the first kill.
   kill_gamepad
   # Last, so every module is up when it starts sending requests.
@@ -132,16 +137,23 @@ do_status() {
 }
 
 do_stop() {
+  local start=$SECONDS end
   # state_machine first, so its final zero /cmd_vel is the last command the wheels get.
-  in_c "pkill -INT -f 'ros2 launch robot_cor[e]'"
+  in_c "pkill -INT -f '$SM'"
   sleep 3
   in_c "pkill -INT -f '$OURS'"
-  for _ in $(seq 10); do
+  end=$((SECONDS + 10))
+  while [ $SECONDS -lt $end ]; do
     [ -z "$(in_c "pgrep -f '$OURS'")" ] && { echo "stopped"; return; }
     sleep 1
   done
-  echo "WARNING: still running after 13 s:"
+  # A node blocked in a read (the mic, say) can ignore SIGINT.
+  echo "still running after $((SECONDS - start)) s, sending SIGKILL"
+  in_c "pkill -KILL -f '$OURS'"
+  sleep 1
+  [ -z "$(in_c "pgrep -f '$OURS'")" ] && { echo "stopped"; return; }
   in_c "ps -eo pid,args | grep -E '$OURS' | cut -c1-100"
+  die "still running after SIGKILL"
 }
 
 case "${1:-}" in

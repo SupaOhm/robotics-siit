@@ -178,7 +178,7 @@ bash ~/share/robotics-siit/tools/robot_bringup.sh stop    # state_machine first,
    `/camera/image_raw`. The camera must publish before `detector_node`
    starts, or the detector gets no frames.
 4. Starts the detector, audio (`ALSA_CARD=2`), password and Telegram nodes,
-   and waits for `/detector_node` and `/password_node`.
+   and waits until all four are in `ros2 node list`.
 5. Kills the gamepad again: on a cold start the container may launch it
    after the first kill.
 6. Starts `robot_core` (`state_machine` and `camera_tilt`) last, and waits for
@@ -186,8 +186,10 @@ bash ~/share/robotics-siit/tools/robot_bringup.sh stop    # state_machine first,
 7. Prints the node list, and exits with an error unless `/cmd_vel` has
    exactly one publisher.
 
-It refuses to start if any of its nodes is already running: run `stop` first,
-also after a failed `start`.
+It refuses to start if any of its nodes is already running, including one
+started by hand with `ros2 run`: run `stop` first, also after a failed `start`.
+`stop` sends SIGINT, then SIGKILL to anything still running after 10 s, and
+exits with an error if something survives.
 Logs are in `/tmp/bringup/<node>.log` in the container. Nodes run in
 interactive shells (`bash -ic`), so they get `/root/.bashrc`: the workspaces,
 domain 42 and `ROBOT_PASSWORD_HASH`. Telegram reads `.env` at the root of the
