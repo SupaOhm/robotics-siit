@@ -40,6 +40,22 @@ def test_recording(recording):
     assert right >= needed_share(recording["expect"]), "said %s" % said
 
 
+# From the robot's log, 11 Nov (d8 to d10): a bottle at the stop and a person
+# standing behind it, as class, confidence and bottom edge. The log has no
+# left and right edges, and the rules don't use them.
+BOTTLE_PERSON_BEHIND = [
+    [("person", 0.89, 0.67), ("bottle", 0.68, 0.85), ("bottle", 0.54, 0.67)],
+    [("person", 0.86, 0.67), ("bottle", 0.72, 0.84), ("bottle", 0.62, 0.61)],
+    [("person", 0.90, 0.67), ("bottle", 0.85, 0.87)],
+]
+
+
+@pytest.mark.parametrize("frame", BOTTLE_PERSON_BEHIND)
+def test_person_behind_the_bottle_does_not_count(frame):
+    boxes = [[name, conf, 0.4, 0.0, 0.6, bottom] for name, conf, bottom in frame]
+    assert answer(boxes, SETTINGS) == "bottle"
+
+
 # On the robot at tilt 30 (10 Nov), a bottle at the stop distance ended 0.74
 # of the way down the frame. A person standing there ends at the same floor
 # line, so person_min_bottom must not rise above it.

@@ -33,6 +33,7 @@ class DetectorNode(Node):
         p("person_threshold", 0.25)
         p("object_threshold", 0.5)
         p("person_min_bottom", 0.0)
+        p("person_behind_margin", 1.0)
         p("name_table", ["bottle=bottle", "backpack=backpack", "laptop=laptop",
                           "cup=cup"])
         p("image_topic", "/camera/image_raw")
@@ -42,6 +43,7 @@ class DetectorNode(Node):
         self.person_threshold = float(g("person_threshold"))
         self.object_threshold = float(g("object_threshold"))
         self.person_min_bottom = float(g("person_min_bottom"))
+        self.person_behind_margin = float(g("person_behind_margin"))
         self.names = parse_name_table(g("name_table"))
         self.frame_timeout = float(g("frame_timeout"))
         self.detector = YoloDetector(
@@ -66,11 +68,13 @@ class DetectorNode(Node):
             Image, g("image_topic"), self.on_image,
             QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE))
         self.create_timer(0.5, self.on_tick)
-        # person_min_bottom 0 is the old person-first rule: shown at startup
-        # so a run without config/detector.yaml stands out.
+        # The defaults (0 and 1) are the old person-first rule: shown at
+        # startup so a run without config/detector.yaml stands out.
         self.get_logger().info(
-            "detector_node ready (%d names, topic %s, person_min_bottom %s)"
-            % (len(self.names), g("image_topic"), self.person_min_bottom))
+            "detector_node ready (%d names, topic %s, person_min_bottom %s, "
+            "person_behind_margin %s)"
+            % (len(self.names), g("image_topic"), self.person_min_bottom,
+               self.person_behind_margin))
 
     def now(self) -> float:
         return self.get_clock().now().nanoseconds / 1e9
@@ -95,7 +99,7 @@ class DetectorNode(Node):
             return
         result = classify(request_id, detections, self.names,
                           self.person_threshold, self.object_threshold,
-                          self.person_min_bottom)
+                          self.person_min_bottom, self.person_behind_margin)
         self.result_pub.publish(String(data=json.dumps(result)))
         self.get_logger().info("result: %s | boxes: %s"
                                % (json.dumps(result), describe(detections)))

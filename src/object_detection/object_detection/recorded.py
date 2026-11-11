@@ -30,6 +30,7 @@ def read_settings(path: str) -> Dict:
         "person": float(value("person_threshold")),
         "object": float(value("object_threshold")),
         "person_min_bottom": float(value("person_min_bottom")),
+        "person_behind_margin": float(value("person_behind_margin")),
         "names": parse_name_table(
             re.findall(r'^\s*-\s*"([^"]+=[^"]+)"', text, re.M)),
     }
@@ -49,7 +50,8 @@ def answer(boxes: Sequence, settings: Dict) -> str:
                   for name, conf, x1, y1, x2, y2 in boxes if conf >= floor]
     result = classify("x", detections, settings["names"],
                       settings["person"], settings["object"],
-                      settings["person_min_bottom"])
+                      settings["person_min_bottom"],
+                      settings["person_behind_margin"])
     return result["label"] or result["kind"]
 
 
