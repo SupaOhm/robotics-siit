@@ -153,3 +153,47 @@ Remove it all with `conda env remove -n ros_env`. Details are in "On a Mac
 (RoboStack)" in `src/gesture_control/README.md`.
 
 - Tested on a real Mac: TODO (purin)
+
+## robot_bringup.sh (Lane 1)
+
+Starts every robot node in `eager_pascal`, in order, with one command. Run it
+on the Pi (over SSH), not in the container.
+
+```bash
+bash ~/share/robotics-siit/tools/robot_bringup.sh start   # about 40 s
+bash ~/share/robotics-siit/tools/robot_bringup.sh status  # nodes, /cmd_vel publisher count
+bash ~/share/robotics-siit/tools/robot_bringup.sh stop    # state_machine first, then the rest
+```
+
+`start` does, in order:
+
+1. Kills the gamepad nodes (`yahboom_joy_M1`, `joy_node`), a second `/cmd_vel`
+   publisher. The base driver keeps running, and `start` waits until it shows
+   as a `/cmd_vel` subscriber. If the container started before the Pi joined
+   the WiFi, it never does: run `docker restart eager_pascal`, then `start`.
+2. Links `/dev/rplidar` in the container to the port the Pi's `/dev/rplidar`
+   points to. It refuses if that is the motor board's port (`/dev/myserial`).
+3. Starts the LiDAR, `obstacle_avoidance` and the camera, waiting for `/scan`,
+   `/obstacle/distance` (printed, so you see what is in front) and
+   `/camera/image_raw`. The camera must publish before `detector_node`
+   starts, or the detector gets no frames.
+4. Starts the detector, audio (`ALSA_CARD=2`), password and Telegram nodes,
+   and waits until all four are in `ros2 node list`.
+5. Kills the gamepad again: on a cold start the container may launch it
+   after the first kill.
+6. Starts `robot_core` (`state_machine` and `camera_tilt`) last, and waits for
+   `/robot/state`.
+7. Prints the node list, and exits with an error unless `/cmd_vel` has
+   exactly one publisher.
+
+It refuses to start if any of its nodes is already running, including one
+started by hand with `ros2 run`: run `stop` first, also after a failed `start`.
+`stop` sends SIGINT, then SIGKILL to anything still running after 10 s, and
+exits with an error if something survives.
+Logs are in `/tmp/bringup/<node>.log` in the container. Nodes run in
+interactive shells (`bash -ic`), so they get `/root/.bashrc`: the workspaces,
+domain 42 and `ROBOT_PASSWORD_HASH`. Telegram reads `.env` at the root of the
+robot's clone.
+
+The gesture node runs on the Mac: start it after `start` finishes
+(`bash tools/mac_ros_setup.sh run`).
