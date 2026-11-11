@@ -104,7 +104,7 @@ def main():
     ap.add_argument("--rate", type=int, default=48000, help="mic_sample_rate")
     ap.add_argument("--model", default="/root/share/vosk-model-small-en-us-0.15")
     ap.add_argument("--words", default="", help="vosk_words")
-    ap.add_argument("--match", default="first", help="match_mode, as in password.yaml")
+    ap.add_argument("--match", default="exact", help="match_mode, as in password.yaml")
     args = ap.parse_args()
     sections = [s for s in args.sections.split(",") if s]
 
