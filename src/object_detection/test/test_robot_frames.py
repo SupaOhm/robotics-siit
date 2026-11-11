@@ -38,3 +38,15 @@ def test_recording(recording):
     said = [answer(frame, SETTINGS) for frame in recording["frames"]]
     right = said.count(recording["expect"]) / len(said)
     assert right >= needed_share(recording["expect"]), "said %s" % said
+
+
+# On the robot at tilt 30 (10 Nov), a bottle at the stop distance ended 0.74
+# of the way down the frame. A person standing there ends at the same floor
+# line, so person_min_bottom must not rise above it.
+STOP_DISTANCE_FLOOR = 0.74
+
+
+def test_person_at_the_stop_distance_counts():
+    person = ["person", 0.5, 0.3, 0.0, 0.7, STOP_DISTANCE_FLOOR]
+    bottle_beside = ["bottle", 0.9, 0.8, 0.5, 0.9, 0.8]
+    assert answer([person, bottle_beside], SETTINGS) == "person"

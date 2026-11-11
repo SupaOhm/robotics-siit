@@ -20,7 +20,7 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
 
-from .classifier import classify, parse_name_table
+from .classifier import classify, describe, parse_name_table
 from .yolo_backend import YoloDetector
 
 
@@ -32,6 +32,7 @@ class DetectorNode(Node):
         p("image_size", 320)
         p("person_threshold", 0.25)
         p("object_threshold", 0.5)
+        p("person_min_bottom", 0.0)
         p("name_table", ["bottle=bottle", "backpack=backpack", "laptop=laptop",
                           "cup=cup"])
         p("image_topic", "/camera/image_raw")
@@ -40,6 +41,7 @@ class DetectorNode(Node):
         g = lambda name: self.get_parameter(name).value
         self.person_threshold = float(g("person_threshold"))
         self.object_threshold = float(g("object_threshold"))
+        self.person_min_bottom = float(g("person_min_bottom"))
         self.names = parse_name_table(g("name_table"))
         self.frame_timeout = float(g("frame_timeout"))
         self.detector = YoloDetector(
@@ -64,8 +66,11 @@ class DetectorNode(Node):
             Image, g("image_topic"), self.on_image,
             QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE))
         self.create_timer(0.5, self.on_tick)
-        self.get_logger().info("detector_node ready (%d names, topic %s)"
-                               % (len(self.names), g("image_topic")))
+        # person_min_bottom 0 is the old person-first rule: shown at startup
+        # so a run without config/detector.yaml stands out.
+        self.get_logger().info(
+            "detector_node ready (%d names, topic %s, person_min_bottom %s)"
+            % (len(self.names), g("image_topic"), self.person_min_bottom))
 
     def now(self) -> float:
         return self.get_clock().now().nanoseconds / 1e9
@@ -89,9 +94,11 @@ class DetectorNode(Node):
             self.get_logger().error("request %s failed: %s" % (request_id, error))
             return
         result = classify(request_id, detections, self.names,
-                          self.person_threshold, self.object_threshold)
+                          self.person_threshold, self.object_threshold,
+                          self.person_min_bottom)
         self.result_pub.publish(String(data=json.dumps(result)))
-        self.get_logger().info("result: %s" % json.dumps(result))
+        self.get_logger().info("result: %s | boxes: %s"
+                               % (json.dumps(result), describe(detections)))
 
     def on_tick(self) -> None:
         if (self.pending_id is not None

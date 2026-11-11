@@ -1,6 +1,7 @@
 import pytest
 
-from object_detection.classifier import (Detection, classify, parse_name_table)
+from object_detection.classifier import (Detection, classify, describe,
+                                         parse_name_table)
 
 NAMES = {"chair": "chair", "dining table": "table", "bottle": "bottle"}
 
@@ -95,6 +96,41 @@ def test_nothing_detected_is_unknown():
                      "confidence": 0.0, "clip": "found_obstacle"}
 
 
+def run_close(*detections):
+    """Only people whose box reaches 0.8 of the way down the frame count."""
+    return classify("d7", detections, NAMES, person_threshold=0.25,
+                    object_threshold=0.5, person_min_bottom=0.8)
+
+
+def test_far_person_does_not_hide_the_object_in_front():
+    # Photo IMG_5036: a bottle in front, a person walking past further back.
+    result = run_close(box("bottle", 0.64, bottom=0.99),
+                       box("person", 0.77, bottom=0.51, left=0.67, right=0.83))
+    assert result["label"] == "bottle"
+
+
+def test_close_person_counts_anywhere_across_the_frame():
+    # At the edge of the robot's path, a person is near the side of the image.
+    result = run_close(box("chair", 0.9, bottom=0.9),
+                       box("person", 0.6, bottom=1.0, left=0.8, right=1.0))
+    assert result["kind"] == "person"
+
+
+def test_best_close_person_confidence_is_reported():
+    result = run_close(box("person", 0.9, bottom=0.5), box("person", 0.4, bottom=0.95))
+    assert result["confidence"] == 0.4
+
+
+def test_person_min_bottom_is_inclusive():
+    assert run_close(box("person", 0.5, bottom=0.8))["kind"] == "person"
+
+
+def test_every_person_counts_by_default():
+    # person_min_bottom 0: person first, whatever else is in frame (D8)
+    result = run(box("bottle", 0.9, bottom=1.0), box("person", 0.3, bottom=0.1))
+    assert result["kind"] == "person"
+
+
 def test_threshold_is_inclusive():
     assert run(box("chair", 0.5))["kind"] == "object"
     assert run(box("person", 0.25))["kind"] == "person"
@@ -109,3 +145,15 @@ def test_parse_name_table():
 def test_parse_name_table_rejects_bad_lines(entry):
     with pytest.raises(ValueError):
         parse_name_table([entry])
+
+
+def test_describe_lists_each_box_with_confidence_and_bottom_edge():
+    # Logged with each result, so person_min_bottom can be chosen on the
+    # robot from the log alone, without saving camera frames.
+    assert describe([box("person", 0.934, bottom=0.987),
+                     box("chair", 0.8, bottom=0.5)]) == (
+        "person 0.93 bottom 0.99, chair 0.80 bottom 0.50")
+
+
+def test_describe_nothing_found():
+    assert describe([]) == "no boxes"

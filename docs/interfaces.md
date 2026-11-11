@@ -116,8 +116,14 @@ and the direction from ±90° to the sides; ultrasonic sees the front only.
 ```
 
 - `kind` is `object`, `person` or `unknown`. `clip` is the audio clip id.
-- **Person first:** if any `person` in the frame is above the person
-  threshold, the result is `person`, whatever else is in frame.
+- **Close person first:** if any `person` above the person threshold is
+  close enough to block the robot, the result is `person`, whatever else is
+  in frame. Close means their box reaches `person_min_bottom` (0.65) of the
+  way down the frame: at the stop distance the floor is at about 0.74.
+  People further back, such as an audience behind the object, don't count.
+  A close person counts anywhere across the frame, not only in the path.
+  Both numbers hold only at camera `tilt_level` 30 (`robot_core.yaml`):
+  if the tilt changes, measure `person_min_bottom` again.
 - Otherwise, low confidence or a class not in Lane 2's name table is
   `unknown`.
 
