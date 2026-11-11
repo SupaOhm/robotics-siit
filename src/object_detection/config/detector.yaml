@@ -11,8 +11,10 @@ detector_node:
 
     # "yolo class=spoken label". Each label needs a found_<label> clip from
     # Lane 4 (audio_player).
+    # No chair (11 Nov): at the stop distance the camera sees only the space
+    # under a chair, so YOLO misses it, and a chair further back could be
+    # named instead of what is in front. A chair plays found_obstacle.
     name_table:
-      - "chair=chair"
       - "bottle=bottle"
       - "backpack=backpack"
       - "laptop=laptop"
