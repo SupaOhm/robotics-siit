@@ -18,6 +18,14 @@ detector_node:
     # 0 counts every person in frame (the old person first rule).
     person_min_bottom: 0.65
 
+    # A person doesn't count either if the object we name ends more than this
+    # much lower in the frame than they do: it stands between them and the
+    # robot. On the robot (11 Nov), bottles at the stop ended at 0.84 to 0.87
+    # and the people behind them at 0.67, past person_min_bottom. A person
+    # beside the object ends at about the same height, so they still count.
+    # 1 never applies.
+    person_behind_margin: 0.10
+
     # "yolo class=spoken label". Each label needs a found_<label> clip from
     # Lane 4 (audio_player).
     # No chair (11 Nov): at the stop distance the camera sees only the space

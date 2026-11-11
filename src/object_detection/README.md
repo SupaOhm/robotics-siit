@@ -19,6 +19,11 @@ the robot: a named object, a person, or an unknown obstacle.
   close enough to block the robot reaches the bottom edge; people further
   back end higher up. `config/detector.yaml` sets 0.65, from the robot at
   tilt 30. 0 counts every person.
+- A person behind the object in front doesn't count either: if the closest
+  named object ends more than `person_behind_margin` (0.10) lower in the
+  frame than their box, it stands between them and the robot. A person
+  beside it ends at about the same height and still counts. If YOLO misses
+  the object, the person counts. 1 never applies.
 - Otherwise the closest box above `object_threshold` whose class is in the
   name table is named: the one whose bottom edge is lowest in the frame, so a
   bottle in front of a larger chair is named, not the chair. Weaker boxes and

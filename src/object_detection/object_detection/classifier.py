@@ -8,6 +8,11 @@ Rules (docs/interfaces.md, D8):
     frame. A person close enough to block the robot reaches the bottom edge,
     wherever they stand across the frame; one further back ends higher up.
     person_min_bottom 0 (the default) counts every person.
+  - A person behind the object in front doesn't count either: if the object
+    named below ends more than person_behind_margin lower in the frame than
+    their box, it stands between them and the robot. That holds at any tilt
+    and wherever the robot stops. If YOLO misses the object, the person
+    counts. person_behind_margin 1 (the default) never applies.
   - Otherwise name the closest box above the object threshold whose class is
     in the name table: the one whose bottom edge is lowest in the frame. The
     camera looks along the floor, so that is what blocks the robot, not a
@@ -57,20 +62,24 @@ def _result(request_id: str, kind: str, label: Optional[str], confidence: float,
 
 def classify(request_id: str, detections: Sequence[Detection],
              names: Dict[str, str], person_threshold: float,
-             object_threshold: float, person_min_bottom: float = 0.0) -> dict:
+             object_threshold: float, person_min_bottom: float = 0.0,
+             person_behind_margin: float = 1.0) -> dict:
     """Build the /detect/result reply for one frame's detections."""
+    named = [d for d in detections
+             if d.name != PERSON and d.name in names
+             and d.confidence >= object_threshold]
+    closest = max(named, key=lambda d: d.box[3]) if named else None
+    # Bottom edge a person must reach to not be behind the closest object.
+    in_front_of = closest.box[3] - person_behind_margin if closest else 0.0
+
     people = [d for d in detections
               if d.name == PERSON and d.confidence >= person_threshold
-              and d.box[3] >= person_min_bottom]
+              and d.box[3] >= max(person_min_bottom, in_front_of)]
     if people:
         best = max(people, key=lambda d: d.confidence)
         return _result(request_id, PERSON, PERSON, best.confidence, None)
 
-    named = [d for d in detections
-             if d.name != PERSON and d.name in names
-             and d.confidence >= object_threshold]
-    if named:
-        closest = max(named, key=lambda d: d.box[3])
+    if closest:
         label = names[closest.name]
         return _result(request_id, "object", label, closest.confidence,
                        "found_" + label)

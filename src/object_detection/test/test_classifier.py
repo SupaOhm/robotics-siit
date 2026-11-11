@@ -125,8 +125,43 @@ def test_person_min_bottom_is_inclusive():
     assert run_close(box("person", 0.5, bottom=0.8))["kind"] == "person"
 
 
+def run_behind(*detections):
+    """A person more than 0.1 behind the named object in front doesn't count."""
+    return classify("d7", detections, NAMES, person_threshold=0.25,
+                    object_threshold=0.5, person_behind_margin=0.1)
+
+
+def test_person_behind_the_object_does_not_count():
+    # Robot log, 11 Nov (d10): a bottle at the stop, a person standing behind.
+    result = run_behind(box("bottle", 0.85, bottom=0.87),
+                        box("person", 0.9, bottom=0.67))
+    assert result["label"] == "bottle"
+
+
+def test_person_beside_the_object_counts():
+    result = run_behind(box("bottle", 0.85, bottom=0.87),
+                        box("person", 0.6, bottom=0.8, left=0.0, right=0.2))
+    assert result["kind"] == "person"
+
+
+def test_person_in_front_of_the_object_counts():
+    result = run_behind(box("bottle", 0.85, bottom=0.7),
+                        box("person", 0.6, bottom=0.95))
+    assert result["kind"] == "person"
+
+
+def test_only_a_named_object_can_hide_a_person():
+    # A weak bottle or a class not in the table might not be there, so the
+    # person counts: on the safe side.
+    result = run_behind(box("bottle", 0.3, bottom=0.9),
+                        box("sofa", 0.9, bottom=0.95),
+                        box("person", 0.6, bottom=0.6))
+    assert result["kind"] == "person"
+
+
 def test_every_person_counts_by_default():
-    # person_min_bottom 0: person first, whatever else is in frame (D8)
+    # person_min_bottom 0 and person_behind_margin 1: person first, whatever
+    # else is in frame (the old D8)
     result = run(box("bottle", 0.9, bottom=1.0), box("person", 0.3, bottom=0.1))
     assert result["kind"] == "person"
 

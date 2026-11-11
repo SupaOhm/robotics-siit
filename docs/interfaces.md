@@ -124,6 +124,12 @@ and the direction from ±90° to the sides; ultrasonic sees the front only.
   A close person counts anywhere across the frame, not only in the path.
   Both numbers hold only at camera `tilt_level` 30 (`robot_core.yaml`):
   if the tilt changes, measure `person_min_bottom` again.
+- **Not behind the object:** a person behind the object in front doesn't
+  count either. Behind means the closest object in Lane 2's name table, above
+  the object threshold, ends more than `person_behind_margin` (0.10) lower
+  in the frame than their box. A person beside the object ends at about the
+  same height, so they still count. If the object isn't found, the person
+  counts.
 - Otherwise, low confidence or a class not in Lane 2's name table is
   `unknown`.
 
