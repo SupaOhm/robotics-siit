@@ -66,8 +66,11 @@ class DetectorNode(Node):
             Image, g("image_topic"), self.on_image,
             QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE))
         self.create_timer(0.5, self.on_tick)
-        self.get_logger().info("detector_node ready (%d names, topic %s)"
-                               % (len(self.names), g("image_topic")))
+        # person_min_bottom 0 is the old person-first rule: shown at startup
+        # so a run without config/detector.yaml stands out.
+        self.get_logger().info(
+            "detector_node ready (%d names, topic %s, person_min_bottom %s)"
+            % (len(self.names), g("image_topic"), self.person_min_bottom))
 
     def now(self) -> float:
         return self.get_clock().now().nanoseconds / 1e9

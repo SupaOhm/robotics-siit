@@ -17,12 +17,19 @@ def read_settings(path: str) -> Dict:
     """
     with open(path) as f:
         text = f.read()
+
+    def value(key: str) -> str:
+        # Anchored, so a comment that mentions the key doesn't match.
+        found = re.search(r"^\s*%s:\s*([\d.]+)" % key, text, re.M)
+        if not found:
+            raise ValueError("%s: no %s line" % (path, key))
+        return found[1]
+
     return {
-        "image_size": int(re.search(r"image_size:\s*(\d+)", text)[1]),
-        "person": float(re.search(r"person_threshold:\s*([\d.]+)", text)[1]),
-        "object": float(re.search(r"object_threshold:\s*([\d.]+)", text)[1]),
-        "person_min_bottom": float(
-            re.search(r"person_min_bottom:\s*([\d.]+)", text)[1]),
+        "image_size": int(value("image_size")),
+        "person": float(value("person_threshold")),
+        "object": float(value("object_threshold")),
+        "person_min_bottom": float(value("person_min_bottom")),
         "names": parse_name_table(
             re.findall(r'^\s*-\s*"([^"]+=[^"]+)"', text, re.M)),
     }

@@ -1,3 +1,5 @@
+import pytest
+
 from object_detection.recorded import answer, read_settings
 
 SETTINGS = {"person": 0.25, "object": 0.5, "person_min_bottom": 0.0,
@@ -10,6 +12,15 @@ def test_settings_read_person_min_bottom(tmp_path):
                       'person_min_bottom: 0.8\nobject_threshold: 0.5\n'
                       'name_table:\n  - "chair=chair"\n')
     assert read_settings(str(config))["person_min_bottom"] == 0.8
+
+
+def test_settings_missing_key_names_it(tmp_path):
+    # The key is only in a comment, so it isn't set.
+    config = tmp_path / "detector.yaml"
+    config.write_text('image_size: 320\nperson_threshold: 0.25\n'
+                      '# person_min_bottom: 0.8\nobject_threshold: 0.5\n')
+    with pytest.raises(ValueError, match="person_min_bottom"):
+        read_settings(str(config))
 
 
 def test_far_person_is_ignored_with_person_min_bottom():
