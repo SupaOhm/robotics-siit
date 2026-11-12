@@ -95,7 +95,7 @@ image loses them; reinstall from each package's README:
 
 | Package | Needs |
 |---|---|
-| `object_detection` | `pip install "numpy==1.26.4" "opencv-python<4.12" ultralytics ncnn`, YOLO model exported to `/root/share/yolo11n_ncnn_model` |
+| `object_detection` | `pip install "numpy==1.26.4" "opencv-python<4.12" ultralytics ncnn`, YOLO model exported to `/root/share/yolo11n_ncnn_model`. `robot_bringup.sh` passes this path as `model_path`; the `~/models` default in `detector.yaml` is for laptops, so don't edit it on the robot |
 | `password_system` | `apt install portaudio19-dev python3-pyaudio`, `pip install SpeechRecognition vosk`, Vosk model in `/root/share/vosk-model-small-en-us-0.15`, `ROBOT_PASSWORD_HASH` in `/root/.bashrc` |
 | `telegram_alert` | `pip install python-telegram-bot` (22.8), `.env` at the clone root |
 
@@ -163,7 +163,9 @@ subscriber, the container started before the Pi joined the WiFi: run
 [tools/README.md](tools/README.md#robot_bringupsh-lane-1).
 
 The Telegram node reads `.env` at the root of the robot's clone
-(`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`); see
+(`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, and optionally
+`TELEGRAM_ALLOWED_USERS`, comma-separated Telegram user ids that may press
+the buttons, empty for anyone in the chat); see
 [src/telegram_alert/README.md](src/telegram_alert/README.md).
 
 ### 2. Start hand gestures on the laptop
